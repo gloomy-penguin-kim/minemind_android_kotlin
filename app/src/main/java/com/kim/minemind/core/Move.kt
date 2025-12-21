@@ -1,8 +1,7 @@
 package com.kim.minemind.core
 
 data class Move(
-    val r: Int,
-    val c: Int,
+    val gid: Int, // global id
     val action: Action,
     val kind: MoveKind = MoveKind.USER,
     val reasons: List<String> = emptyList(),

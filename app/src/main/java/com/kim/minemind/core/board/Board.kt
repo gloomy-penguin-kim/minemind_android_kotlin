@@ -24,7 +24,7 @@ class Board(
 
 //    var cells: Array<Array<Cell>> = Array(rows) { Array(cols) { Cell(it, it) } }
 
-    var cells: Array<Cell> = Array(rows * cols) {
+    var cells: MutableList<Cell> = MutableList(rows * cols) {
         Cell(it / cols, it % cols, it)
     }
         private set
@@ -197,16 +197,14 @@ class Board(
 
 
     fun generateBoard(firstClickGid: Int) {
-        Log.d(TAG, "generateBoard, $firstClickGid")
+        Log.d(TAG, "generateBoard, $firstClickGid  $mines")
 
         val rng = RNG(seed, rows, cols, mines, firstClickGid)
 
-        val forbidden: MutableSet<Int> = mutableSetOf()
+        val forbidden: MutableSet<Int> = mutableSetOf(firstClickGid)
         neighbors(firstClickGid).forEach { forbidden.add(it) }
-        val forbiddenList = forbidden.toMutableList()
+        var forbiddenList = forbidden.toMutableList()
         rng.shuffle(forbiddenList)
-        forbiddenList.take(3)
-        forbiddenList.add(firstClickGid)
         Log.d(TAG, "forbiddenList = $forbiddenList")
 
         // Gather candidates (everything else)
@@ -240,24 +238,39 @@ class Board(
         minesPlaced = true
     }
 
-    fun neighbors(gid: Int): IntArray {
+//    fun neighbors(gid: Int): IntArray {
+//        val r = gid / cols
+//        val c = gid % cols
+//
+//        val out = IntArray(8)
+//        var k = 0
+//
+//        for (dr in -1..1) {
+//            for (dc in -1..1) {
+//                if (dr == 0 && dc == 0) continue
+//                val nr = r + dr
+//                val nc = c + dc
+//                if (nr in 0 until rows && nc in 0 until cols) {
+//                    out[k++] = nr * cols + nc
+//                }
+//            }
+//        }
+//        return out.copyOf(k)
+//    }
+
+    fun neighbors(gid: Int): Sequence<Int> = sequence {
         val r = gid / cols
         val c = gid % cols
-
-        val out = IntArray(8)
-        var k = 0
-
         for (dr in -1..1) {
             for (dc in -1..1) {
                 if (dr == 0 && dc == 0) continue
                 val nr = r + dr
                 val nc = c + dc
                 if (nr in 0 until rows && nc in 0 until cols) {
-                    out[k++] = nr * cols + nc
+                    yield(nr * cols + nc)
                 }
             }
         }
-        return out.copyOf(k)
     }
 
 }

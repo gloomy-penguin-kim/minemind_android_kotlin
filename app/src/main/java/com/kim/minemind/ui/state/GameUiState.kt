@@ -10,16 +10,18 @@ data class GameUiState(
     val gameOver: Boolean = false,
     val win: Boolean = false,
     val flagMode: Boolean = false,
-    val cells: List<Cell> = emptyList(),
+    val cells: List<CellUI> = emptyList(),
 )
 
-data class CellUi(
-    val r: Int,
-    val c: Int,
-    val revealed: Boolean,
-    val flagged: Boolean,
-    val exploded: Boolean,
-    val adj: Int,
-    val mine: Boolean = false,
-    val probability: Float? = null
+
+data class CellUI(
+    val row: Int,
+    val col: Int,
+    val gid: Int,
+    var isMine: Boolean = false,
+    var isRevealed: Boolean = false,
+    var isFlagged: Boolean = false,
+    var isExploded: Boolean = false,
+    var adjacentMines: Int = 0,
+    var probability: Float? = null
 )

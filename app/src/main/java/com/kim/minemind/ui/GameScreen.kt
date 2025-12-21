@@ -20,6 +20,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import com.kim.minemind.core.board.Cell
+import com.kim.minemind.ui.state.CellUI
 
 
 @Composable
@@ -66,12 +67,12 @@ fun GameScreen(vm: GameViewModel) {
             BoardGrid(
                 cols = ui.cols,
                 cells = ui.cells,
-                onCell = { r, c ->
+                onCell = { gid ->
                     val action = if (ui.flagMode) Action.FLAG else Action.OPEN
-                    vm.dispatch(action, r, c)
+                    vm.dispatch(action, gid)
                 },
-                onCellLongPress = { r, c ->
-                    vm.dispatch(Action.FLAG, r, c)
+                onCellLongPress = { gid ->
+                    vm.dispatch(Action.FLAG, gid)
                 }
             )
         }
@@ -82,9 +83,9 @@ fun GameScreen(vm: GameViewModel) {
 @OptIn(ExperimentalFoundationApi::class)
 private fun BoardGrid(
     cols: Int,
-    cells: List<Cell>,
-    onCell: (Int, Int) -> Unit,
-    onCellLongPress: (Int, Int) -> Unit,
+    cells: List<CellUI>,
+    onCell: (Int) -> Unit,
+    onCellLongPress: (Int) -> Unit,
 ) {
     val cellSize = 34.dp
 
@@ -93,20 +94,11 @@ private fun BoardGrid(
         modifier = Modifier.fillMaxWidth(),
         userScrollEnabled = true
     ) {
-        items(cells) { cell ->
+        items(cells, key = { it.gid }) { cell ->
 
-            val p = (cell.probability ?: 0f) // 0..1, or null if unknown
             val bg = when {
                 cell.isRevealed || cell.isFlagged ->
                     MaterialTheme.colorScheme.surfaceVariant
-
-//                cell.probability != null ->
-//                    probToBg(
-//                        p = p,
-//                        base = MaterialTheme.colorScheme.surfaceTint,          // light
-//                        hot  = MaterialTheme.colorScheme.surfaceVariant    // darker
-//                    )
-
                 else ->
                     MaterialTheme.colorScheme.surface
             }
@@ -117,17 +109,16 @@ private fun BoardGrid(
                     .padding(1.dp)
                     .background(bg)
                     .combinedClickable(
-                        onClick = { onCell(cell.row, cell.col) },
-                        onLongClick = { onCellLongPress(cell.row, cell.col) }
+                        onClick = { onCell(cell.gid) },
+                        onLongClick = { onCellLongPress(cell.gid) }
                     ),
                 contentAlignment = Alignment.Center
             ) {
                 val txt = when {
                     cell.isFlagged -> "F"
-                    cell.isRevealed and (cell.adjacentMines == -1) -> "*"
-                    cell.isRevealed and (cell.adjacentMines == 0) -> ""
-                    cell.isRevealed and (cell.adjacentMines >= 1) -> cell.adjacentMines.toString()
-                    cell.isRevealed -> ""
+                    cell.isRevealed && (cell.adjacentMines == -1) -> "*"
+                    cell.isRevealed && (cell.adjacentMines == 0) -> ""
+                    cell.isRevealed && (cell.adjacentMines >= 1) -> cell.adjacentMines.toString()
                     else -> "?"
                 }
                 Text(txt)
@@ -135,6 +126,7 @@ private fun BoardGrid(
         }
     }
 }
+
 
 private fun probToBg(
     p: Float,                 // 0.0 .. 1.0

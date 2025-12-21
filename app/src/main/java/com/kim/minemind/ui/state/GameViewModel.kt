@@ -51,25 +51,29 @@ class GameViewModel : ViewModel() {
         _uiState.update { it.copy(flagMode = !it.flagMode) }
     }
 
-    fun dispatch(action: Action, r: Int, c: Int) {
+    fun dispatch(action: Action, gid: Int) {
         val beforeMoves = _uiState.value.moves
-        val move = Move(r = r, c = c, action = action, kind = MoveKind.USER)
 
-        val cs = board.apply(action, r, c)
-        if (cs.empty) return
-
-        history.push(HistoryEntry(move, cs, moveCountBefore = beforeMoves))
+        val csBoard = board.apply(action, gid)
+        if (csBoard.empty) return
 
         val components = solver.buildFrontier(board)
-        val probs = probabilityEngine.computeProbabilities(board, components)
-        // probs is now a Map<Int, Flaot> for globalId and the float percentage
+        val probs = probabilityEngine.computeProbabilities(board, components) // Map<Int, Float?>
+
+        // Create a ChangeSet that only represents probability updates
+        val csProb = ChangeSet(probabilities = probs)
+
+        // Merge into the “single truth for undo”
+        val cs = csBoard.merged(csProb)
+
+        history.push(HistoryEntry(Move(gid, action, MoveKind.USER), cs, beforeMoves))
 
         _uiState.update { s ->
             s.copy(
                 moves = beforeMoves + 1,
                 gameOver = cs.gameOver,
                 win = cs.win,
-                cells = patchCells(s.cells, cs, board)
+                cells = patchCells(s.cells, cs, board) // now includes prob changes
             )
         }
     }
@@ -77,14 +81,12 @@ class GameViewModel : ViewModel() {
 
 
     private fun patchCells(
-        base: List<Cell>,
+        base: List<CellUI>,
         cs: ChangeSet,
         board: Board
-    ): List<Cell> {
-        val cols = board.cols
+    ): List<CellUI> {
         val updated = base.toMutableList()
 
-        // Union of all coords we need to refresh in UI
         val changed = HashSet<Int>().apply {
             addAll(cs.revealed)
             addAll(cs.flagged)
@@ -93,14 +95,20 @@ class GameViewModel : ViewModel() {
 
         for (gid in changed) {
             val bc = board.cells[gid]
-            val p = cs.probabilities[r to c] ?: bc.probability
+            val r = gid / board.cols
+            val c = gid % board.cols
+            // val p = cs.probabilities[gid]
 
-            updated[idx(r, c, cols)] = Cell(
+            val p = if (cs.probabilities.containsKey(gid)) cs.probabilities[gid] else updated[gid].probability
+
+            updated[gid] = CellUI(
                 row = r,
                 col = c,
+                gid = gid,
                 isMine = bc.isMine,
                 isRevealed = bc.isRevealed,
                 isFlagged = bc.isFlagged,
+                isExploded = bc.isExploded,
                 adjacentMines = bc.adjacentMines,
                 probability = p
             )
@@ -109,39 +117,46 @@ class GameViewModel : ViewModel() {
         return updated
     }
 
+
     fun undo() {
         val entry = history.pop() ?: return
         board.undo(entry)
 
-        // You likely have (or can add) a ChangeSet returned from undo;
-        // if not, easiest is: rebuild once for undo, or store undo changes in HistoryEntry.
+        val components = solver.buildFrontier(board)
+        val probs = probabilityEngine.computeProbabilities(board, components)
+
         _uiState.update { s ->
+            val rebuilt = buildCells(board)
             s.copy(
                 moves = entry.moveCountBefore,
                 gameOver = false,
                 win = false,
-                cells = buildCells(board) // OK for now; later patch incrementally too
+                cells = rebuilt.mapIndexed { gid, cell ->
+                    cell.copy(probability = probs[gid] ?: cell.probability)
+                }
             )
         }
     }
 
 
-    private fun buildCells(b: Board): List<Cell> {
-        val out = ArrayList<Cell>(b.rows * b.cols)
-        for (r in 0 until b.rows) {
-            for (c in 0 until b.cols) {
-                out.add(
-                    Cell(
-                        row = r,
-                        col = c,
-                        isMine = b.cells[r][c].isMine,
-                        isRevealed = b.cells[r][c].isRevealed,
-                        isFlagged = b.cells[r][c].isFlagged,
-                        adjacentMines = b.cells[r][c].adjacentMines,
-                        probability = b.cells[r][c].probability
-                    )
+    private fun buildCells(b: Board): List<CellUI> {
+        val out = ArrayList<CellUI>(b.rows * b.cols)
+        for (gid in 0 until (b.rows * b.cols)) {
+            val bc = b.cells[gid]
+            val r = gid / b.cols
+            val c = gid % b.cols
+            out.add(
+                CellUI(
+                    row = r,
+                    col = c,
+                    gid = gid,
+                    isMine = bc.isMine,
+                    isRevealed = bc.isRevealed,
+                    isFlagged = bc.isFlagged,
+                    adjacentMines = bc.adjacentMines,
+                    probability = bc.probability
                 )
-            }
+            )
         }
         return out
     }
