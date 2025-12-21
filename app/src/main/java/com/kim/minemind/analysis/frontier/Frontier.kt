@@ -7,52 +7,41 @@ import java.util.BitSet
 
 class Frontier (
 ) {
-//    init {
-//        val components = buildFrontier(board)
-//    }
-
     fun constraintsAndUnknownNeighbors(board: Board): Pair<List<Scope>, IntArray> {
-        val rows = board.rows
-        val cols = board.cols
-
         val scopes = ArrayList<Scope>()
-        // unique key: gids + remaining. (You can replace this with a better key type later.)
         val seen = HashSet<String>()
         val allUnknowns = HashSet<Int>()
 
-        for (r in 0 until rows) {
-            for (c in 0 until cols) {
+        for (cell in board.cells) {
+            if (!cell.isRevealed) continue
+            if (cell.adjacentMines <= 0) continue
+            if (cell.isFlagged) continue
+            if (cell.isMine) continue
 
-                if (!board.isRevealed(r, c)) continue
+            var flagged = 0
+            val unknownNeighbors = ArrayList<Int>()
 
-                val adj = board.adjMines(r, c)
-                if (adj <= 0) continue
+            for (gid in board.neighbors(cell.gid)) {
+                if (board.cells[gid].isFlagged) flagged++
+                else if (!board.cells[gid].isRevealed) unknownNeighbors.add(gid)
+            }
 
-                var flagged = 0
-                val unknownNeighbors = ArrayList<Pair<Int, Int>>()
+            if (unknownNeighbors.isEmpty()) continue
 
-                for ((nr, nc) in board.neighbors(r, c)) {
-                    if (board.isFlagged(nr, nc)) flagged++
-                    else if (!board.isRevealed(nr, nc)) unknownNeighbors.add(nr to nc)
-                }
+            val remaining = cell.adjacentMines - flagged
 
-                if (unknownNeighbors.isEmpty()) continue
+            val gids = IntArray(unknownNeighbors.size)
 
-                val remaining = adj - flagged
+            for (i in unknownNeighbors.indices) {
+                val gid = unknownNeighbors[i]
+                gids[i] = gid
+                allUnknowns.add(gid)
+            }
+            gids.sort()
 
-                val gids = IntArray(unknownNeighbors.size)
-                for (i in unknownNeighbors.indices) {
-                    val (nr, nc) = unknownNeighbors[i]
-                    val gid = nr * cols + nc
-                    gids[i] = gid
-                    allUnknowns.add(gid)
-                }
-                gids.sort()
-
-                val key = gids.joinToString(prefix = "[", postfix = "]") + "|$remaining"
-                if (seen.add(key)) {
-                    scopes.add(Scope(gids, remaining))
-                }
+            val key = gids.joinToString(prefix = "[", postfix = "]") + "|$remaining"
+            if (seen.add(key)) {
+                scopes.add(Scope(gids, remaining))
             }
         }
 

@@ -85,14 +85,14 @@ class GameViewModel : ViewModel() {
         val updated = base.toMutableList()
 
         // Union of all coords we need to refresh in UI
-        val changed = HashSet<Pair<Int, Int>>().apply {
+        val changed = HashSet<Int>().apply {
             addAll(cs.revealed)
             addAll(cs.flagged)
             addAll(cs.probabilities.keys)
         }
 
-        for ((r, c) in changed) {
-            val bc = board.cells[r][c]
+        for (gid in changed) {
+            val bc = board.cells[gid]
             val p = cs.probabilities[r to c] ?: bc.probability
 
             updated[idx(r, c, cols)] = Cell(

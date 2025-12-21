@@ -41,7 +41,7 @@ private fun compareWords(a: LongArray, b: LongArray): Int {
 fun componentSignatureStable(comp: Component): ComponentSignature {
     // Make pairs (words, remaining), sort, then wrap words into BitsKey
     val pairs = comp.constraints.map { c ->
-        c.maskLocal.toLongArray() to c.remaining
+        c.mask.toLongArray() to c.remaining
     }.sortedWith { p1, p2 ->
         val cmp = compareWords(p1.first, p2.first)
         if (cmp != 0) cmp else p1.second.compareTo(p2.second)

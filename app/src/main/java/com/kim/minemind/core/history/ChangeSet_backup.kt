@@ -1,9 +1,9 @@
 package com.kim.minemind.core.history
 
-data class ChangeSet(
-    val revealed: Set<Int> = emptySet(),
-    val flagged: Set<Int> = emptySet(),
-    val probabilities: Map<Int, Float?> = emptyMap(),
+class ChangeSet_backup (
+    val revealed: Set<Pair<Int, Int>> = emptySet(),
+    val flagged: Set<Pair<Int, Int>> = emptySet(),
+    val probabilities: Map<Pair<Int, Int>, Float?> = emptyMap(),
     val gameOver: Boolean = false,
     val win: Boolean = false,
 ) {

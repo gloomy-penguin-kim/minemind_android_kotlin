@@ -7,14 +7,14 @@ class RNG(
     private val rows: Int,
     private val cols: Int,
     private val mines: Int,
-    private val firstClick: Pair<Int, Int>
+    private val firstClickGid: Int
 ) {
     private val _rng: Random
 
     init {
         // Create a hash based on the input parameters
         val hash = (seed.hashCode() * 31 + rows.hashCode()) * 31 + cols.hashCode()
-        val fullHash = (hash * 31 + mines.hashCode()) * 31 + firstClick.hashCode()
+        val fullHash = (hash * 31 + mines.hashCode()) * 31 + firstClickGid.hashCode()
         _rng = Random(fullHash)
     }
 

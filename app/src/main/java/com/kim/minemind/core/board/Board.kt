@@ -22,27 +22,42 @@ class Board(
     var win: Boolean = false
         private set
 
-    var cells: Array<Array<Cell>> = Array(rows) { Array(cols) { Cell(it, it) } }
+//    var cells: Array<Array<Cell>> = Array(rows) { Array(cols) { Cell(it, it) } }
+
+    var cells: Array<Cell> = Array(rows * cols) {
+        Cell(it / cols, it % cols, it)
+    }
+        private set
 
     var remainingSafe: Int = rows * cols - mines
+        private set
 
 
     companion object {
         private const val TAG = "core.board"
     }
-    fun apply(action: Action, r: Int, c: Int, flagValue: Boolean? = null): ChangeSet {
+
+    fun gid(r: Int, c: Int) = r * cols + c
+    fun rc(gid: Int) = gid / cols to gid % cols
+
+    fun cell(r: Int, c: Int) = cells[gid(r, c)]
+    fun cell(gid: Int) = cells[gid]
+
+    fun apply(action: Action, gid: Int, flagValue: Boolean? = null): ChangeSet {
         if (gameOver) return ChangeSet()
 
         if (action == Action.OPEN && !minesPlaced) {
-            generateBoard(r to c)
+            generateBoard(gid)
         }
-        Log.d(TAG, "row = $r, col = $c")
-        Log.d(TAG, "cell = ${cells[r][c]}")
+
+        val c: Pair<Int, Int>  = rc(gid)
+        Log.d(TAG, "row = ${c.first}, col = ${c.second}")
+        Log.d(TAG, "cell = ${cells[gid]} at $gid")
 
         val csDelta = when (action) {
-            Action.OPEN -> revealCell(r, c)
-            Action.FLAG -> toggleFlag(r, c, flagValue)
-            Action.CHORD -> chord(r, c)
+            Action.OPEN -> revealCell(gid)
+            Action.FLAG -> toggleFlag(gid, flagValue)
+            Action.CHORD -> chord(gid)
         }
         val csWin = checkWinCondition()
         val csCombined = csDelta.merged(csWin)
@@ -51,28 +66,28 @@ class Board(
         return csCombined
     }
 
-    private fun revealCell(r: Int, c: Int): ChangeSet {
-        if (cells[r][c].isRevealed || cells[r][c].isFlagged) return ChangeSet()
+    private fun revealCell(gid: Int): ChangeSet {
+        if (cells[gid].isRevealed || cells[gid].isFlagged) return ChangeSet()
 
-        if (cells[r][c].isMine) {
+        if (cells[gid].isMine) {
             return loseCondition()
         }
-        val csFlood = floodReveal(r, c)
-        val cs = ChangeSet(revealed = setOf(r to c))
+        val csFlood = floodReveal(gid)
+        val cs = ChangeSet(revealed = setOf(gid))
         val csCombined = cs.merged(csFlood)
         Log.d(TAG, "revealCell = $csCombined")
-        cells[r][c].isRevealed = true
+        cells[gid].isRevealed = true
         return csCombined
     }
 
-    private fun floodReveal(r: Int, c: Int): ChangeSet {
-        val revealedSet = mutableSetOf<Pair<Int, Int>>()
-        val stack = ArrayDeque<Pair<Int, Int>>()
-        stack.addLast(r to c)
+    private fun floodReveal(gid: Int): ChangeSet {
+        val revealedSet = mutableSetOf<Int>()
+        val stack = ArrayDeque<Int>()
+        stack.addLast(gid)
 
         while (stack.isNotEmpty()) {
-            val (cr, cc) = stack.removeLast()
-            val cell = cells[cr][cc]
+            val gid = stack.removeLast()
+            val cell = cells[gid]
 
             Log.d(TAG, "floodReveal = $cell")
 
@@ -81,14 +96,14 @@ class Board(
             if (cell.isMine) continue
             if (cell.isExploded) continue
 
-            cells[cr][cc].isRevealed = true
-            revealedSet.add(cr to cc)
+            cells[gid].isRevealed = true
+            revealedSet.add(gid)
             remainingSafe -= 1
 
             if (cell.adjacentMines == 0) {
-                for ((nr, nc) in neighbors(cr, cc)) {
-                    if (!cells[nr][nc].isRevealed && !cells[nr][nc].isFlagged) {
-                        stack.addLast(nr to nc)
+                for (nGid in neighbors(gid)) {
+                    if (!cells[nGid].isRevealed && !cells[nGid].isFlagged) {
+                        stack.addLast(nGid)
                     }
                 }
             }
@@ -98,14 +113,12 @@ class Board(
 
 
     private fun loseCondition(): ChangeSet {
-        val mines = mutableSetOf<Pair<Int, Int>>()
+        val mines = mutableSetOf<Int>()
 
-        for (i in 0 until rows) {
-            for (j in 0 until cols) {
-                if (cells[i][j].isMine) {
-                    cells[i][j].isRevealed = true
-                    mines.add(i to j)
-                }
+        for (cell in cells) {
+            if (cell.isMine) {
+                cell.isRevealed = true
+                mines.add(cell.gid)
             }
         }
 
@@ -118,15 +131,13 @@ class Board(
     }
 
     private fun checkWinCondition(): ChangeSet {
-        val newlyFlagged = mutableSetOf<Pair<Int, Int>>()
+        val newlyFlagged = mutableSetOf<Int>()
 
-        if (remainingSafe <= 0 && !gameOver) {
-            for (i in 0 until rows) {
-                for (j in 0 until cols) {
-                    if (!cells[i][j].isRevealed && !cells[i][j].isFlagged) {
-                        cells[i][j].isFlagged = true
-                        newlyFlagged.add(i to j)
-                    }
+        if ((remainingSafe <= 0) and !gameOver) {
+            for (cell in cells) {
+                if (!cell.isRevealed && !cell.isFlagged) {
+                    cell.isFlagged = true
+                    newlyFlagged.add(cell.gid)
                 }
             }
             win = true
@@ -141,74 +152,68 @@ class Board(
         )
     }
 
-    private fun toggleFlag(r: Int, c: Int, flagValue: Boolean?): ChangeSet {
-        if (cells[r][c].isRevealed or !minesPlaced) return ChangeSet()
-        val before = cells[r][c].isFlagged
+    private fun toggleFlag(gid: Int, flagValue: Boolean?): ChangeSet {
+        if (cells[gid].isRevealed or !minesPlaced) return ChangeSet()
+        val before = cells[gid].isFlagged
         val after = flagValue ?: !before
         if (before == after) return ChangeSet()
-        cells[r][c].isFlagged = after
-        return ChangeSet(flagged = setOf(r to c))
+        cells[gid].isFlagged = after
+        return ChangeSet(flagged = setOf(gid))
     }
 
-    private fun chord(r: Int, c: Int): ChangeSet {
+    private fun chord(gid: Int): ChangeSet {
         return ChangeSet()
     }
 
     fun undo(entry: HistoryEntry) {
-        entry.changes.revealed.forEach { (rr, cc) -> cells[rr][cc].isRevealed = false }
-        entry.changes.flagged.forEach { (rr, cc) -> cells[rr][cc].isFlagged = false }
-        for (r in 0 until rows) {
-            for (c in 0 until cols) {
-                val key: Pair<Int, Int> = r to c
-                if (key in entry.changes.probabilities)
-                    cells[r][c].probability = entry.changes.probabilities[key]!!
-                else
-                    cells[r][c].probability = null
-            }
+        entry.changes.revealed.forEach { gid -> cells[gid].isRevealed = false }
+        entry.changes.flagged.forEach { gid -> cells[gid].isFlagged = false }
+        for (cell in cells) {
+            val key = cell.gid
+            if (key in entry.changes.probabilities)
+                cells[key].probability = entry.changes.probabilities[key]!!
+            else
+                cells[key].probability = null
         }
         gameOver = false
         win = false
     }
 
-    fun isRevealed(r: Int, c: Int): Boolean = cells[r][c].isRevealed
+    fun isRevealed(gid: Int): Boolean = cells[gid].isRevealed
     fun isRevealedGid(gid: Int): Boolean {
         val r = gid / cols
         val c = gid % cols
-        return cells[r][c].isRevealed
+        return cells[gid].isRevealed
     }
-    fun isFlagged(r: Int, c: Int): Boolean = cells[r][c].isFlagged
+    fun isFlagged(gid: Int): Boolean = cells[gid].isFlagged
     fun isFlaggedGid(gid: Int): Boolean {
         val r = gid / cols
         val c = gid % cols
-        return cells[r][c].isFlagged
+        return cells[gid].isFlagged
     }
 
-    fun isMine(r: Int, c: Int): Boolean = cells[r][c].isMine
-    fun adjMines(r: Int, c: Int): Int = cells[r][c].adjacentMines
+    fun isMine(gid: Int): Boolean = cells[gid].isMine
+    fun adjMines(gid: Int): Int = cells[gid].adjacentMines
 
 
-    fun generateBoard(firstClick: Pair<Int, Int>) {
-        Log.d(TAG, "generateBoard, $firstClick")
+    fun generateBoard(firstClickGid: Int) {
+        Log.d(TAG, "generateBoard, $firstClickGid")
 
-        val rng = RNG(seed, rows, cols, mines, firstClick)
+        val rng = RNG(seed, rows, cols, mines, firstClickGid)
 
-        val r0 = firstClick.first
-        val c0 = firstClick.second
-
-        val forbidden = mutableSetOf(Pair(r0, c0))
-        neighbors( r0, c0).forEach { forbidden.add(it) }
+        val forbidden: MutableSet<Int> = mutableSetOf()
+        neighbors(firstClickGid).forEach { forbidden.add(it) }
         val forbiddenList = forbidden.toMutableList()
         rng.shuffle(forbiddenList)
-        forbiddenList.take(n)
+        forbiddenList.take(3)
+        forbiddenList.add(firstClickGid)
         Log.d(TAG, "forbiddenList = $forbiddenList")
 
         // Gather candidates (everything else)
-        val candidates = mutableListOf<Pair<Int, Int>>()
-        for (r in 0 until rows) {
-            for (c in 0 until cols) {
-                if (forbiddenList.contains(Pair(r, c))) continue
-                candidates.add(Pair(r, c))
-            }
+        val candidates = mutableListOf<Int>()
+        for (cell in cells) {
+            if (forbiddenList.contains(cell.gid)) continue
+            candidates.add(cell.gid)
         }
 
         if (mines > candidates.size) {
@@ -219,35 +224,40 @@ class Board(
         rng.shuffle(candidates)
         val mineCells = candidates.take(mines).toSet()
 
-        mineCells.forEach { (r, c) ->  cells[r][c].isMine = true }
+        mineCells.forEach { gid ->  cells[gid].isMine = true }
 
-        for (r in 0 until rows) {
-            for (c in 0 until cols) {
-                if (cells[r][c].isMine) {
-                    cells[r][c].adjacentMines = -1 // Mark mines as -1
-                } else {
-                    var count = 0
-                    neighbors(r, c).forEach { (nr, nc) ->
-                        if (cells[nr][nc].isMine) count++
-                    }
-                    cells[r][c].adjacentMines = count
+        for (cell in cells) {
+            if (cell.isMine) {
+                cell.adjacentMines = -1 // Mark mines as -1
+            } else {
+                var count = 0
+                neighbors(cell.gid).forEach { nGid ->
+                    if (cells[nGid].isMine) count++
                 }
+                cell.adjacentMines = count
             }
         }
         minesPlaced = true
     }
 
-    fun neighbors(r: Int, c: Int): Sequence<Pair<Int, Int>> = sequence {
+    fun neighbors(gid: Int): IntArray {
+        val r = gid / cols
+        val c = gid % cols
+
+        val out = IntArray(8)
+        var k = 0
+
         for (dr in -1..1) {
             for (dc in -1..1) {
                 if (dr == 0 && dc == 0) continue
                 val nr = r + dr
                 val nc = c + dc
                 if (nr in 0 until rows && nc in 0 until cols) {
-                    yield(nr to nc)
+                    out[k++] = nr * cols + nc
                 }
             }
         }
+        return out.copyOf(k)
     }
 
 }
