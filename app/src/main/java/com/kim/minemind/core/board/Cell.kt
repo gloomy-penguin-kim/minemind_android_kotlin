@@ -1,5 +1,7 @@
 package com.kim.minemind.core.board
 
+import com.kim.minemind.core.Action
+
 data class Cell(
     val row: Int,
     val col: Int,
@@ -9,5 +11,6 @@ data class Cell(
     var isFlagged: Boolean = false,
     var isExploded: Boolean = false,
     var adjacentMines: Int = 0,
-    var probability: Float? = null
+    var probability: Float? = null,
+    var ruleAction: Action? = null
 )

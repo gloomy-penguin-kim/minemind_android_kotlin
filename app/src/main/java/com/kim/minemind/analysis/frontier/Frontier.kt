@@ -105,8 +105,6 @@ class Frontier (
                     val local = globalToLocal[gid]!!
                     localMask.set(local)
                 }
-
-                val globalMask = globalMasks[idx].clone() as BitSet
                 constraints.add(Constraint(localMask, s.remaining))
             }
 

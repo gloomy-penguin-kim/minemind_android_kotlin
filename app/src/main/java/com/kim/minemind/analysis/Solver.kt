@@ -5,6 +5,7 @@ import com.kim.minemind.analysis.frontier.Component
 import com.kim.minemind.core.*
 import com.kim.minemind.core.board.Board
 import com.kim.minemind.analysis.frontier.Frontier
+import com.kim.minemind.analysis.rules.Move
 
 class Solver() {
 

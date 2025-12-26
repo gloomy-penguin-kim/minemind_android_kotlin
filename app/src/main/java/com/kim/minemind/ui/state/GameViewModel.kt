@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.update
 import com.kim.minemind.core.*
 import com.kim.minemind.analysis.Solver
 import com.kim.minemind.analysis.enumeration.ProbabilityEngine
+import com.kim.minemind.analysis.rules.Move
 import com.kim.minemind.core.board.Board
 import com.kim.minemind.core.board.Cell
 import com.kim.minemind.core.history.ChangeSet

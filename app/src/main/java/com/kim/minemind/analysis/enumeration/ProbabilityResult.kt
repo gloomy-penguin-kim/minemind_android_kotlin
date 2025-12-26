@@ -1,6 +1,6 @@
 package com.kim.minemind.analysis.enumeration
 
-data class ProbabilityResult(
+data class  ProbabilityResult(
     val solutions: Long,
     // length == k, counts of mine in each local index across all solutions
     val mineCounts: IntArray

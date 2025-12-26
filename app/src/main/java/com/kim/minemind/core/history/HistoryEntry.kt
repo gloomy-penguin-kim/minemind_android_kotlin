@@ -1,6 +1,6 @@
 package com.kim.minemind.core.history
 
-import com.kim.minemind.core.Move
+import com.kim.minemind.analysis.rules.Move
 
 data class HistoryEntry(
     val move: Move,
