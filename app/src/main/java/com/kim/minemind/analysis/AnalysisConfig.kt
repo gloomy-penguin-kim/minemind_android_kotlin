@@ -1,0 +1,4 @@
+package com.kim.minemind.analysis
+
+class AnalysisConfig {
+}

@@ -3,13 +3,12 @@ package com.kim.minemind.analysis.rules
 import com.kim.minemind.analysis.frontier.Component
 import com.kim.minemind.core.Action
 import com.kim.minemind.core.MoveKind
-import com.kim.minemind.core.board.Board
 import java.util.BitSet
 
 fun singlesRule (
     comp: Component,
-    board: Board,
     moves: MoveList,
+    stopAfterOne: Boolean,
 ) {
     for (constraint in comp.constraints) {
         val mask: BitSet = constraint.mask.clone() as BitSet
@@ -19,12 +18,32 @@ fun singlesRule (
 
         if (remaining == 0) {
             for (gid in comp.localToGlobal) {
-                board.cells[gid].probability = 0.0f
+//                board.cells[gid].probability = 0.0f
+                moves.addMove(mask,
+                    comp.localToGlobal,
+                    Move(gid,
+                    Action.OPEN,
+                    MoveKind.RULE,
+                    mutableListOf("Singles: remaining == 0 are SAFE")))
+
+                if (stopAfterOne && moves.isNotEmpty()) {
+                    return
+                }
             }
         }
         if (remaining == scopeSize) {
             for (gid in comp.localToGlobal) {
-                board.cells[gid].probability = 100.0f
+//                board.cells[gid].probability = 100.0f
+                moves.addMove(mask,
+                    comp.localToGlobal,
+                    Move(gid,
+                    Action.FLAG,
+                    MoveKind.RULE,
+                    mutableListOf("Singles: remaining == |scope| are MINES")))
+
+                if (stopAfterOne && moves.isNotEmpty()) {
+                    return
+                }
             }
         }
     }
