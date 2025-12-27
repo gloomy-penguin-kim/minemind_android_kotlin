@@ -5,6 +5,7 @@ import com.kim.minemind.analysis.caching.LruCache
 import com.kim.minemind.analysis.caching.componentSignatureStable
 import com.kim.minemind.analysis.frontier.Component
 import android.util.Log
+import com.kim.minemind.analysis.AnalysisConfig
 import com.kim.minemind.core.board.Board
 import kotlin.math.max
 
@@ -13,9 +14,15 @@ private const val SAFE = 0
 private const val MINE = 1
 
 class ProbabilityEngine (
-    private val maxK: Int = 100,
-    private val cacheCapacity: Int = 128
 ) {
+    private val config: AnalysisConfig = AnalysisConfig
+    val maxK: Int = config.maxKPerComponent
+    val cacheCapacity: Int = config.cacheCapacity
+
+//    ProbabilityEngine (analysis/enumeration)
+//        Input: board + frontier components
+//        Output: Map<gid, pMine> (plus maybe “unknown/outside frontier” if you do global accounting)
+//        Pure-ish (except cache)
 
     companion object {
         private const val TAG = "analysis.enumeration.probability"

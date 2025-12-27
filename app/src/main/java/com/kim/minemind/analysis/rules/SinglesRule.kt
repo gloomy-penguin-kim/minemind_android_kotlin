@@ -21,7 +21,7 @@ fun singlesRule (
             while (bit >= 0) {
                 val gid = comp.localToGlobal[bit]
 
-                moves.addMove(mask,
+                moves.addMove((mask.clone() as BitSet),
                             comp.localToGlobal,
                             Move(gid,
                             Action.OPEN,
@@ -39,7 +39,7 @@ fun singlesRule (
             while (bit >= 0) {
                 val gid = comp.localToGlobal[bit]
 
-                moves.addMove(mask,
+                moves.addMove((mask.clone() as BitSet),
                     comp.localToGlobal,
                     Move(gid,
                         Action.FLAG,

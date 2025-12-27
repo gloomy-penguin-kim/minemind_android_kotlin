@@ -19,9 +19,19 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
-import com.kim.minemind.core.board.Cell
 import com.kim.minemind.ui.state.CellUI
 
+
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
+import kotlin.math.max
+import kotlin.math.min
+
+
+import android.util.Log
+
+private const val TAG = "ui.GameViewModel"
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -64,20 +74,58 @@ fun GameScreen(vm: GameViewModel) {
                 Spacer(Modifier.height(8.dp))
             }
 
-            BoardGrid(
-                cols = ui.cols,
-                cells = ui.cells,
-                onCell = { gid ->
-                    val action = if (ui.flagMode) Action.FLAG else Action.OPEN
-                    vm.dispatch(action, gid)
-                },
-                onCellLongPress = { gid ->
-                    vm.dispatch(Action.FLAG, gid)
-                }
-            )
+            ZoomableBoard {
+                BoardGrid(
+                    cols = ui.cols,
+                    cells = ui.cells,
+                    onCell = { gid ->
+                        val action = if (ui.flagMode) Action.FLAG else Action.OPEN
+                        vm.dispatch(action, gid)
+                    },
+                    onCellLongPress = { gid ->
+                        vm.dispatch(Action.FLAG, gid)
+                    }
+                )
+            }
         }
     }
 }
+
+
+@Composable
+fun ZoomableBoard(
+    content: @Composable () -> Unit
+) {
+    var scale by remember { mutableStateOf(1f) }
+    var offsetX by remember { mutableStateOf(0f) }
+    var offsetY by remember { mutableStateOf(0f) }
+
+    // tune
+    val minScale = 0.8f
+    val maxScale = 3.0f
+    val tiltDegrees = -2.5f   // “slight angle”; set 0f if you don’t want it
+
+    Box(
+        Modifier
+            .pointerInput(Unit) {
+                detectTransformGestures { _, pan, zoom, _ ->
+                    scale = (scale * zoom).coerceIn(minScale, maxScale)
+                    offsetX += pan.x
+                    offsetY += pan.y
+                }
+            }
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                translationX = offsetX
+                translationY = offsetY
+                rotationZ = tiltDegrees
+            }
+    ) {
+        content()
+    }
+}
+
 
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
@@ -114,12 +162,30 @@ private fun BoardGrid(
                     ),
                 contentAlignment = Alignment.Center
             ) {
+                Log.d(TAG, "cell = $cell")
                 val txt = when {
-                    cell.isFlagged -> "F"
-                    cell.isRevealed && (cell.adjacentMines == -1) -> "*"
+                    cell.isFlagged && !cell.isRevealed -> "F"
+                    cell.isRevealed && (cell.adjacentMines == -1) -> "@"
                     cell.isRevealed && (cell.adjacentMines == 0) -> ""
                     cell.isRevealed && (cell.adjacentMines >= 1) -> cell.adjacentMines.toString()
-                    else -> "?"
+
+                    cell.forcedFlag -> "X"
+                    cell.forcedOpen -> "O"
+
+                    (cell.probability ?: -1.0f) <  0.0f  -> ""
+                    (cell.probability ?: -1.0f) <= 0.05f -> "0"
+                    (cell.probability ?: -1.0f) <= 0.15f -> "."
+                    (cell.probability ?: -1.0f) <= 0.25f -> ","
+                    (cell.probability ?: -1.0f) <= 0.35f -> ":"
+                    (cell.probability ?: -1.0f) <= 0.45f -> "-"
+                    (cell.probability ?: -1.0f) <= 0.55f -> "~"
+                    (cell.probability ?: -1.0f) <= 0.65f -> "="
+                    (cell.probability ?: -1.0f) <= 0.75f -> "+"
+                    (cell.probability ?: -1.0f) <= 0.85f -> "*"
+                    (cell.probability ?: -1.0f) <= 0.95f -> "#"
+                    (cell.probability ?: -1.0f) >  0.95f -> "X"
+
+                    else -> ""
                 }
                 Text(txt)
             }

@@ -72,7 +72,7 @@ fun subsetsRule (
                         "${a} is a subset of",
                         "${b}"
                     )
-                    processMovesForMask(diff, Action.OPEN, reasons)
+                    processMovesForMask((diff.clone() as BitSet), Action.OPEN, reasons)
                     if (stopAfterOne && moves.isNotEmpty()) return
                 }
                 // all in B\A are MINES
@@ -83,7 +83,7 @@ fun subsetsRule (
                         "${b}"
                     )
 
-                    processMovesForMask(diff, Action.FLAG, reasons)
+                    processMovesForMask((diff.clone() as BitSet), Action.FLAG, reasons)
                     if (stopAfterOne && moves.isNotEmpty()) return
                 }
             }
@@ -101,7 +101,7 @@ fun subsetsRule (
                         "${b} is a subset of",
                         "${a}"
                     )
-                    processMovesForMask(diff, Action.OPEN, reasons)
+                    processMovesForMask((diff.clone() as BitSet), Action.OPEN, reasons)
                     if (stopAfterOne && moves.isNotEmpty()) return
                 }
                 // all in A\B are MINES
@@ -112,13 +112,10 @@ fun subsetsRule (
                         "${a}"
                     )
 
-                    processMovesForMask(diff, Action.FLAG, reasons)
+                    processMovesForMask((diff.clone() as BitSet), Action.FLAG, reasons)
                     if (stopAfterOne && moves.isNotEmpty()) return
                 }
             }
-
         }
     }
-
-
 }

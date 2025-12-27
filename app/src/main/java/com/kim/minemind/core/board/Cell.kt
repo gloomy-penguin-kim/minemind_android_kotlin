@@ -10,7 +10,6 @@ data class Cell(
     var isRevealed: Boolean = false,
     var isFlagged: Boolean = false,
     var isExploded: Boolean = false,
-    var adjacentMines: Int = 0,
-    var probability: Float? = null,
-    var ruleAction: Action? = null
+    var adjacentMines: Int = 0
 )
+

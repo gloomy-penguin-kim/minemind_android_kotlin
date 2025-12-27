@@ -7,7 +7,7 @@ import java.util.BitSet
 
 class Frontier (
 ) {
-    fun constraintsAndUnknownNeighbors(board: Board): Pair<List<Scope>, IntArray> {
+    private fun constraintsAndUnknownNeighbors(board: Board): Pair<List<Scope>, IntArray> {
         val scopes = ArrayList<Scope>()
         val seen = HashSet<String>()
         val allUnknowns = HashSet<Int>()
@@ -16,7 +16,7 @@ class Frontier (
             if (!cell.isRevealed) continue
             if (cell.adjacentMines <= 0) continue
             if (cell.isFlagged) continue
-            if (cell.isMine) continue
+            if (cell.isExploded) continue
 
             var flagged = 0
             val unknownNeighbors = ArrayList<Int>()
@@ -49,7 +49,7 @@ class Frontier (
         return scopes to allUnknownsSorted
     }
 
-    fun dsuFind(globalMasks: List<BitSet>): Map<Int, List<Int>> {
+    private fun dsuFind(globalMasks: List<BitSet>): Map<Int, List<Int>> {
         val c = globalMasks.size
         val dsu = DisjointSetUnion (c)
 
@@ -68,7 +68,7 @@ class Frontier (
         return components
     }
 
-    fun buildFrontier(board: Board): List<Component> {
+    fun build(board: Board): List<Component> {
         val (scopes, _) = constraintsAndUnknownNeighbors(board)
         if (scopes.isEmpty()) return emptyList()
 

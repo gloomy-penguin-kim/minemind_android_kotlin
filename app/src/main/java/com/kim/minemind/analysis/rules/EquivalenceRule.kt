@@ -23,7 +23,7 @@ fun equivalenceRule(
         while (bit >= 0) {
             val gid = comp.localToGlobal[bit]
             moves.addMove(
-                mask,
+                (mask.clone() as BitSet),
                 comp.localToGlobal,
                 Move(gid, action, MoveKind.RULE, reasons)
             )
@@ -48,7 +48,7 @@ fun equivalenceRule(
             // (1) equality contradiction
             if (a == b && remA != remB) {
                 moves.addConflicts(
-                    mask = a,
+                    mask = (a.clone() as BitSet),
                     localToGlobal = comp.localToGlobal,
                     reasons = listOf(
                         "SCOPE_EQUALITY_CONTRADICTION: A==B but remaining differs",
@@ -65,7 +65,7 @@ fun equivalenceRule(
                 val diff = difference(b, a)
                 if (!diff.isEmpty) {
                     enqueueMovesForMask(
-                        diff,
+                        (diff.clone() as BitSet),
                         Action.OPEN,
                         listOf(
                             "Equivalence: A⊂B and rem(A)==rem(B) -> B\\A SAFE",
@@ -81,7 +81,7 @@ fun equivalenceRule(
                 val diff = difference(a, b)
                 if (!diff.isEmpty) {
                     enqueueMovesForMask(
-                        diff,
+                        (diff.clone() as BitSet),
                         Action.OPEN,
                         listOf(
                             "Equivalence: B⊂A and rem(A)==rem(B) -> A\\B SAFE",

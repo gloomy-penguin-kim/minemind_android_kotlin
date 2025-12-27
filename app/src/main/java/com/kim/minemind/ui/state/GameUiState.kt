@@ -1,5 +1,6 @@
 package com.kim.minemind.ui.state
 
+import com.kim.minemind.core.Action
 import com.kim.minemind.core.board.Cell
 
 data class GameUiState(
@@ -15,13 +16,16 @@ data class GameUiState(
 
 
 data class CellUI(
-    val row: Int,
-    val col: Int,
     val gid: Int,
-    var isMine: Boolean = false,
-    var isRevealed: Boolean = false,
-    var isFlagged: Boolean = false,
-    var isExploded: Boolean = false,
-    var adjacentMines: Int = 0,
-    var probability: Float? = null
+    val isMine: Boolean,
+    val isRevealed: Boolean,
+    val isFlagged: Boolean,
+    val isExploded: Boolean,
+    val adjacentMines: Int,
+
+    val probability: Float?,      // from overlay
+    var forcedOpen: Boolean = false,     // from overlay
+    var forcedFlag: Boolean = false,
+    val conflict: Boolean = false,        // from overlay
+//    val ruleAction: Action?       // from overlay
 )

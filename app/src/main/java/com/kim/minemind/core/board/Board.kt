@@ -1,11 +1,9 @@
 package com.kim.minemind.core.board
 
 import android.util.Log
-import com.kim.minemind.analysis.enumeration.ProbabilityEngine
 import com.kim.minemind.core.Action
 import com.kim.minemind.core.history.ChangeSet
 import com.kim.minemind.core.history.HistoryEntry
-import com.kim.minemind.analysis.Solver
 
 class Board(
     val rows: Int,
@@ -58,6 +56,7 @@ class Board(
             Action.OPEN -> revealCell(gid)
             Action.FLAG -> toggleFlag(gid, flagValue)
             Action.CHORD -> chord(gid)
+            Action.INVALID -> ChangeSet()
         }
         val csWin = checkWinCondition()
         val csCombined = csDelta.merged(csWin)
@@ -168,13 +167,6 @@ class Board(
     fun undo(entry: HistoryEntry) {
         entry.changes.revealed.forEach { gid -> cells[gid].isRevealed = false }
         entry.changes.flagged.forEach { gid -> cells[gid].isFlagged = false }
-        for (cell in cells) {
-            val key = cell.gid
-            if (key in entry.changes.probabilities)
-                cells[key].probability = entry.changes.probabilities[key]!!
-            else
-                cells[key].probability = null
-        }
         gameOver = false
         win = false
     }
