@@ -5,33 +5,30 @@ import com.kim.minemind.core.Action
 import com.kim.minemind.core.MoveKind
 import java.util.BitSet
 
-
 fun equivalenceRule(
     comp: Component,
     moves: MoveList,
     stopAfterOne: Boolean
 ) {
     fun isProperSubset(a: BitSet, b: BitSet): Boolean {
-        // a ⊆ b  <=>  (a ∩ b) == a
         val inter = (a.clone() as BitSet).apply { and(b) }
         return inter == a && a != b
     }
 
-    fun difference(b: BitSet, a: BitSet): BitSet {
-        // b \ a
-        return (b.clone() as BitSet).apply { andNot(a) }
-    }
+    fun difference(b: BitSet, a: BitSet): BitSet =
+        (b.clone() as BitSet).apply { andNot(a) }
 
     fun enqueueMovesForMask(mask: BitSet, action: Action, reasons: List<String>) {
-        var idx = mask.nextSetBit(0)
-        while (idx >= 0) {
-            val gid = comp.localToGlobal[idx]
-            if (action == Action.FLAG) {
-                moves.addMove(mask, comp.localToGlobal,
-                    Move(gid, action, MoveKind.RULE, reasons)
-                )
-            }
-            idx = mask.nextSetBit(idx + 1)
+        var bit = mask.nextSetBit(0)
+        while (bit >= 0) {
+            val gid = comp.localToGlobal[bit]
+            moves.addMove(
+                mask,
+                comp.localToGlobal,
+                Move(gid, action, MoveKind.RULE, reasons)
+            )
+            if (stopAfterOne && moves.isNotEmpty()) return
+            bit = mask.nextSetBit(bit + 1)
         }
     }
 
@@ -48,51 +45,54 @@ fun equivalenceRule(
             val remB = constraints[j].remaining
             if (b.isEmpty) continue
 
-            // (1) Exact scope equality contradiction check
+            // (1) equality contradiction
             if (a == b && remA != remB) {
-                moves.addConflicts(mask = a,
+                moves.addConflicts(
+                    mask = a,
                     localToGlobal = comp.localToGlobal,
                     reasons = listOf(
-                        "A == B but remaining differs",
-                        "mask=${a} remA=$remA",
-                        "mask=${b} remB=$remB"
+                        "SCOPE_EQUALITY_CONTRADICTION: A==B but remaining differs",
+                        "A=$a rem=$remA",
+                        "B=$b rem=$remB"
                     )
                 )
-
-                // no early-stop here by default; you can if you want:
-                 if (stopAfterOne) return
+                if (stopAfterOne) return
                 continue
             }
 
-            // (2) Proper subset + equal remaining => diff SAFE
-
-            // A ⊂ B and rem(A) == rem(B) => (B\A) safe
+            // (2) A ⊂ B and remA == remB => (B\A) safe
             if (remA == remB && isProperSubset(a, b)) {
                 val diff = difference(b, a)
                 if (!diff.isEmpty) {
-                    val reasons = listOf(
-                        "Equivalence: A⊂B and rem(A)==rem(B) -> B\\A SAFE",
-                        "A=$a rem=$remA is subset of ",
-                        "B=$b rem=$remB"
+                    enqueueMovesForMask(
+                        diff,
+                        Action.OPEN,
+                        listOf(
+                            "Equivalence: A⊂B and rem(A)==rem(B) -> B\\A SAFE",
+                            "A=$a rem=$remA subset of",
+                            "B=$b rem=$remB"
+                        )
                     )
-                    enqueueMovesForMask(diff, Action.OPEN, reasons)
-                    if (stopAfterOne && moves.isNotEmpty()) return
                 }
             }
 
-            // B ⊂ A and rem(A) == rem(B) => (A\B) safe
+            // (2) B ⊂ A and remA == remB => (A\B) safe
             if (remA == remB && isProperSubset(b, a)) {
                 val diff = difference(a, b)
                 if (!diff.isEmpty) {
-                    val reasons = listOf(
-                        "Equivalence: B⊂A and rem(A)==rem(B) -> A\\B SAFE",
-                        "B=$b rem=$remB is subset of ",
-                        "A=$a rem=$remA"
+                    enqueueMovesForMask(
+                        diff,
+                        Action.OPEN,
+                        listOf(
+                            "Equivalence: B⊂A and rem(A)==rem(B) -> A\\B SAFE",
+                            "B=$b rem=$remB subset of",
+                            "A=$a rem=$remA"
+                        )
                     )
-                    enqueueMovesForMask(diff, Action.OPEN, reasons)
-                    if (stopAfterOne && moves.isNotEmpty()) return
                 }
             }
+
+            if (stopAfterOne && moves.isNotEmpty()) return
         }
     }
 }

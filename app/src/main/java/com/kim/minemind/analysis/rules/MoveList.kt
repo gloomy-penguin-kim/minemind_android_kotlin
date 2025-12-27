@@ -39,22 +39,12 @@ class MoveList(
         // in the
         if (existing == null) {
             if (move.action == Action.FLAG) {
-                if (board.cells[gid].isMine) {
-                    moves[gid] = move
-                    forcedFlags.add(gid)
-                }
-                else  {
-                    addConflict(gid, move)
-                }
+                moves[gid] = move
+                forcedFlags.add(gid)
             }
             else if (move.action == Action.OPEN) {
-                if (!board.cells[gid].isMine) {
-                    moves[gid] = move
-                    forcedOpens.add(gid)
-                }
-                else  {
-                    addConflict(gid, move)
-                }
+                moves[gid] = move
+                forcedOpens.add(gid)
             }
             ruleActionByGid[gid] = move.action
             return

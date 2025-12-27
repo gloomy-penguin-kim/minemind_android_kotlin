@@ -17,33 +17,39 @@ fun singlesRule (
         val remaining: Int = constraint.remaining
 
         if (remaining == 0) {
-            for (gid in comp.localToGlobal) {
-//                board.cells[gid].probability = 0.0f
+            var bit = mask.nextSetBit(0)
+            while (bit >= 0) {
+                val gid = comp.localToGlobal[bit]
+
                 moves.addMove(mask,
-                    comp.localToGlobal,
-                    Move(gid,
-                    Action.OPEN,
-                    MoveKind.RULE,
-                    mutableListOf("Singles: remaining == 0 are SAFE")))
+                            comp.localToGlobal,
+                            Move(gid,
+                            Action.OPEN,
+                            MoveKind.RULE,
+                            listOf("Singles: remaining == 0 are SAFE")))
 
                 if (stopAfterOne && moves.isNotEmpty()) {
                     return
                 }
+                bit = mask.nextSetBit(bit + 1)
             }
         }
         if (remaining == scopeSize) {
-            for (gid in comp.localToGlobal) {
-//                board.cells[gid].probability = 100.0f
+            var bit = mask.nextSetBit(0)
+            while (bit >= 0) {
+                val gid = comp.localToGlobal[bit]
+
                 moves.addMove(mask,
                     comp.localToGlobal,
                     Move(gid,
-                    Action.FLAG,
-                    MoveKind.RULE,
-                    mutableListOf("Singles: remaining == |scope| are MINES")))
+                        Action.FLAG,
+                        MoveKind.RULE,
+                        listOf("Singles: remaining == |scope| are MINES")))
 
                 if (stopAfterOne && moves.isNotEmpty()) {
                     return
                 }
+                bit = mask.nextSetBit(bit + 1)
             }
         }
     }
