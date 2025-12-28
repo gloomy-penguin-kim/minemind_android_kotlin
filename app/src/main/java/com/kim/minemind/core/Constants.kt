@@ -11,3 +11,7 @@ enum class MoveKind(val text: String) {
     RULE("RULE"),
     AUTO("AUTO");
 }
+
+enum class TapMode { OPEN, FLAG, CHORD, INFO }
+
+enum class TopMenuAction { AUTO, STEP, VERIFY, ENUMERATE, SAVE, LOAD, NEW, SETTINGS }

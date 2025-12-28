@@ -12,9 +12,9 @@ class Analyzer() {
     private val ruleEngine: RuleEngine = RuleEngine()
     private val probabilityEngine: ProbabilityEngine = ProbabilityEngine()
 
-    fun analyze(board: Board): AnalyzerOverlay {
+    fun analyze(board: Board, stopAfterOne: Boolean = false): AnalyzerOverlay {
         val comps = frontier.build(board)
-        val rules = ruleEngine.evaluate(board, comps)
+        val rules = ruleEngine.evaluate(board, comps, stopAfterOne)
 
         val shouldRunProbs = shouldRunProbabilities(comps, rules)
         val probs = if (shouldRunProbs) probabilityEngine.computeProbabilities(board, comps) else emptyMap()
@@ -39,7 +39,8 @@ class Analyzer() {
         if (!config.enableProbabilities) return false
 
         // If rules already found forced moves, probs aren’t needed *yet*
-        if (rules.forcedFlags.isNotEmpty() || rules.forcedOpens.isNotEmpty()) return config.runProbabilitiesEvenWhenForced
+        if (rules.forcedFlags.isNotEmpty() || rules.forcedOpens.isNotEmpty())
+            return config.runProbabilitiesEvenWhenForced
 
         val totalK = comps.sumOf { it.k }
         if (totalK == 0) return false

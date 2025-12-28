@@ -59,20 +59,8 @@ class MoveList(
             return
         }
 
-//        // conflict found...!
-//        conflictsGids.add(gid)
-//
-//        if (gid in ruleActionByGid) {
-//            ruleActionByGid.remove(gid)
-//        }
-//        if (gid in forcedOpens) {
-//            forcedOpens.remove(gid)
-//        }
-//        if (gid in forcedFlags) {
-//            forcedFlags.remove(gid)
-//        }
-//
-//        // Conflict: record both reasons and remove the move from moves
+
+       // Conflict: record both reasons and remove the move from moves
         val bucket = conflicts.getOrPut(gid) { LinkedHashSet() }
 
         existing.reasons.firstOrNull()?.let { bucket.add(it) }

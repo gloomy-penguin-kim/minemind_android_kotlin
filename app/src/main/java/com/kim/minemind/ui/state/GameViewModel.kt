@@ -16,6 +16,7 @@ import com.kim.minemind.core.history.HistoryEntry
 import com.kim.minemind.core.history.HistoryStack
 
 import android.util.Log
+import kotlinx.coroutines.flow.getAndUpdate
 
 class GameViewModel : ViewModel() {
     companion object {
@@ -40,6 +41,15 @@ class GameViewModel : ViewModel() {
 
     fun newGame(rows: Int, cols: Int, mines: Int) {
         board = Board(rows, cols, mines, seed = 0)
+
+        _uiState.value = GameUiState(
+            rows = rows,
+            cols = cols,
+            mines = mines,
+            moves = 0,
+            cells = buildCells(board)
+        )
+
         solver.clear()
         analyzer.clear()
         history.clear()
@@ -51,9 +61,14 @@ class GameViewModel : ViewModel() {
             cells = buildCells(board)
         )
     }
+    fun handleTopMenu(action: TopMenuAction) {
+        if (action == TopMenuAction.NEW) {
+            newGame(rows=25, cols= 25, mines=150)
+        }
+    }
 
-    fun toggleFlagMode() {
-        _uiState.update { it.copy(flagMode = !it.flagMode) }
+    fun setTapMode(m: TapMode) {
+        _uiState.update { it.copy(tapMode = m) }
     }
 
     fun dispatch(action: Action, gid: Int) {
@@ -63,6 +78,19 @@ class GameViewModel : ViewModel() {
         if (truthDelta.empty) return
 
         history.push(HistoryEntry(Move(gid, action, MoveKind.USER),truthDelta, beforeMoves))
+        _uiState.update { s ->
+            s.copy(
+                moves = beforeMoves + 1,
+                gameOver = truthDelta.gameOver,
+                win = truthDelta.win,
+                cells = patchCells(
+                    base = s.cells,
+                    cs = truthDelta,
+                    board = board
+                )
+            )
+        }
+
 
         val overlay = analyzer.analyze(board)
 
@@ -70,7 +98,6 @@ class GameViewModel : ViewModel() {
         Log.d(TAG, "forcedFlags = ${overlay.forcedFlags}")
         Log.d(TAG, "forcedOpens = ${overlay.forcedOpens}")
         Log.d(TAG, "probs = ${overlay.probabilities}")
-
 
         _uiState.update { s ->
             s.copy(
@@ -82,7 +109,8 @@ class GameViewModel : ViewModel() {
                     cs = truthDelta,
                     board = board,
                     overlay = overlay
-                )
+                ),
+                overlay = overlay // <-- new overlay
             )
         }
     }
@@ -92,7 +120,7 @@ class GameViewModel : ViewModel() {
         base: List<CellUI>,
         cs: ChangeSet,
         board: Board,
-        overlay: AnalyzerOverlay
+        overlay: AnalyzerOverlay? = null
     ): List<CellUI> {
         val updated = base.toMutableList()
 
@@ -100,20 +128,16 @@ class GameViewModel : ViewModel() {
             addAll(cs.revealed)
             addAll(cs.flagged)
 
-            // overlay-driven changes
-            addAll(overlay.forcedOpens)
-            addAll(overlay.forcedFlags)
-            addAll(overlay.conflicts)
-            addAll(overlay.probabilities.keys)
+            if (overlay != null) {
+                // overlay-driven changes
+                addAll(overlay.forcedOpens)
+                addAll(overlay.forcedFlags)
+                addAll(overlay.conflicts)
+                addAll(overlay.probabilities.keys)
+            }
         }
 
-        for (gid in changed) {
-            val bc = board.cells[gid]
-
-            val p =
-                if (overlay.probabilities.containsKey(gid)) overlay.probabilities[gid]
-                else updated[gid].probability
-
+        // for (gid in changed) {
             for (gid in changed) {
                 val bc = board.cells[gid]
 
@@ -125,39 +149,61 @@ class GameViewModel : ViewModel() {
                     isExploded = bc.isExploded,
                     adjacentMines = bc.adjacentMines,
 
-                    probability = overlay.probabilities[gid],
-                    forcedOpen = gid in overlay.forcedOpens,
-                    forcedFlag = gid in overlay.forcedFlags,
-                    conflict = gid in overlay.conflicts,
+                    probability = overlay?.probabilities[gid],
+                    forcedOpen = gid in (overlay?.forcedOpens ?: emptySet()),
+                    forcedFlag = gid in (overlay?.forcedFlags ?: emptySet()),
+                    conflict = gid in (overlay?.conflicts ?: emptySet()),
                 )
             }
 
-        }
+        // }
 
         return updated
     }
+    fun info() {
+        setTapMode(TapMode.INFO)
+    }
+
+    fun handleInfo(gid: Int) {
+
+    }
+
+    fun step() {
+        val overlay = _uiState.value.overlay ?: analyzer.analyze(board, stopAfterOne = true)
 
 
+        Log.d(TAG, "overlay = $overlay")
+        Log.d(TAG, "forcedFlags = ${overlay.forcedFlags}")
+        Log.d(TAG, "forcedOpens = ${overlay.forcedOpens}")
+        Log.d(TAG, "probs = ${overlay.probabilities}")
+    }
+    fun auto() {
+        val overlay = _uiState.value.overlay ?: analyzer.analyze(board, stopAfterOne = true)
 
-//    fun undo() {
-//        val entry = history.pop() ?: return
-//        board.undo(entry)
-//
-//        val components = solver.buildFrontier(board)
-//        val probs = probabilityEngine.computeProbabilities(board, components)
-//
-//        _uiState.update { s ->
-//            val rebuilt = buildCells(board)
-//            s.copy(
-//                moves = entry.moveCountBefore,
-//                gameOver = false,
-//                win = false,
-//                cells = rebuilt.mapIndexed { gid, cell ->
-//                    cell.copy(probability = probs[gid] ?: cell.probability)
-//                }
-//            )
-//        }
-//    }
+
+        Log.d(TAG, "overlay = $overlay")
+        Log.d(TAG, "forcedFlags = ${overlay.forcedFlags}")
+        Log.d(TAG, "forcedOpens = ${overlay.forcedOpens}")
+        Log.d(TAG, "probs = ${overlay.probabilities}")
+    }
+    fun verify() {
+        val overlay = _uiState.value.overlay ?: analyzer.analyze(board, stopAfterOne = true)
+
+
+        Log.d(TAG, "overlay = $overlay")
+        Log.d(TAG, "forcedFlags = ${overlay.forcedFlags}")
+        Log.d(TAG, "forcedOpens = ${overlay.forcedOpens}")
+        Log.d(TAG, "probs = ${overlay.probabilities}")
+    }
+    fun enumerate() {
+        val overlay = _uiState.value.overlay ?: analyzer.analyze(board, stopAfterOne = true)
+
+
+        Log.d(TAG, "overlay = $overlay")
+        Log.d(TAG, "forcedFlags = ${overlay.forcedFlags}")
+        Log.d(TAG, "forcedOpens = ${overlay.forcedOpens}")
+        Log.d(TAG, "probs = ${overlay.probabilities}")
+    }
 
     fun undo() {
         val entry = history.pop() ?: return

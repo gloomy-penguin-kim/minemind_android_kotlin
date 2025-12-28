@@ -84,16 +84,18 @@ class Board(
         val stack = ArrayDeque<Int>()
         stack.addLast(gid)
 
+        Log.d(TAG, "floodReveal = $stack")
+
         while (stack.isNotEmpty()) {
             val gid = stack.removeLast()
             val cell = cells[gid]
-
-            Log.d(TAG, "floodReveal = $cell")
 
             if (cell.isRevealed) continue
             if (cell.isFlagged) continue
             if (cell.isMine) continue
             if (cell.isExploded) continue
+
+            Log.d(TAG, "floodReveal = $cell")
 
             cells[gid].isRevealed = true
             revealedSet.add(gid)
@@ -101,7 +103,10 @@ class Board(
 
             if (cell.adjacentMines == 0) {
                 for (nGid in neighbors(gid)) {
-                    if (!cells[nGid].isRevealed && !cells[nGid].isFlagged) {
+                    if (!cells[nGid].isRevealed &&
+                        !cells[nGid].isFlagged &&
+                        !cells[nGid].isMine &&
+                        !cells[nGid].isExploded) {
                         stack.addLast(nGid)
                     }
                 }
@@ -161,7 +166,31 @@ class Board(
     }
 
     private fun chord(gid: Int): ChangeSet {
-        return ChangeSet()
+        if (!cells[gid].isRevealed and !cells[gid].isExploded) return ChangeSet()
+
+        val mineCount = cells[gid].adjacentMines
+        var flagCount = 0
+
+        for (nGid in neighbors(gid)) {
+            if (cells[nGid].isFlagged) {
+                flagCount += 1
+            }
+        }
+        Log.d(TAG, "chord = $mineCount, $flagCount")
+        val revealed: MutableSet<Int> = mutableSetOf()
+        var cs = ChangeSet()
+
+        if (mineCount == flagCount) {
+            for (nGid in neighbors(gid)) {
+                if (!cells[nGid].isRevealed and !cells[nGid].isFlagged) {
+                    val csApply: ChangeSet = apply(Action.OPEN, nGid)
+                    cs = cs.merged(csApply)
+                }
+            }
+        }
+        Log.d(TAG, "chord = $revealed")
+        Log.d(TAG, "cs = $cs")
+        return cs
     }
 
     fun undo(entry: HistoryEntry) {
@@ -229,26 +258,6 @@ class Board(
         }
         minesPlaced = true
     }
-
-//    fun neighbors(gid: Int): IntArray {
-//        val r = gid / cols
-//        val c = gid % cols
-//
-//        val out = IntArray(8)
-//        var k = 0
-//
-//        for (dr in -1..1) {
-//            for (dc in -1..1) {
-//                if (dr == 0 && dc == 0) continue
-//                val nr = r + dr
-//                val nc = c + dc
-//                if (nr in 0 until rows && nc in 0 until cols) {
-//                    out[k++] = nr * cols + nc
-//                }
-//            }
-//        }
-//        return out.copyOf(k)
-//    }
 
     fun neighbors(gid: Int): Sequence<Int> = sequence {
         val r = gid / cols

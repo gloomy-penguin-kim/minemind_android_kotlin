@@ -1,7 +1,10 @@
 package com.kim.minemind.ui.state
 
+import com.kim.minemind.analysis.analyzer.AnalyzerOverlay
 import com.kim.minemind.core.Action
+import com.kim.minemind.core.TapMode
 import com.kim.minemind.core.board.Cell
+
 
 data class GameUiState(
     val rows: Int = 9,
@@ -10,10 +13,10 @@ data class GameUiState(
     val moves: Int = 0,
     val gameOver: Boolean = false,
     val win: Boolean = false,
-    val flagMode: Boolean = false,
+    val tapMode: TapMode = TapMode.OPEN,
     val cells: List<CellUI> = emptyList(),
+    val overlay: AnalyzerOverlay? = null
 )
-
 
 data class CellUI(
     val gid: Int,
@@ -29,3 +32,6 @@ data class CellUI(
     val conflict: Boolean = false,        // from overlay
 //    val ruleAction: Action?       // from overlay
 )
+
+
+
