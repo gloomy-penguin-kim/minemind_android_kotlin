@@ -1,9 +1,10 @@
 package com.kim.minemind.analysis.rules
 
 import com.kim.minemind.analysis.frontier.Component
+import com.kim.minemind.shared.Move
+import com.kim.minemind.shared.MoveList
 import com.kim.minemind.core.Action
 import com.kim.minemind.core.MoveKind
-import com.kim.minemind.core.board.Board
 import java.util.BitSet
 
 fun subsetsRule (
@@ -31,17 +32,23 @@ fun subsetsRule (
             if (action == Action.OPEN) {
                 moves.addMove(mask,
                     comp.localToGlobal,
-                    Move(gid,
-                    Action.OPEN,
-                    MoveKind.RULE,
-                    reasons))
+                    Move(
+                        gid,
+                        Action.OPEN,
+                        MoveKind.RULE,
+                        reasons
+                    )
+                )
             } else if (action == Action.FLAG) {
                 moves.addMove(mask,
                     comp.localToGlobal,
-                    Move(gid,
-                    Action.FLAG,
-                    MoveKind.RULE,
-                    reasons))
+                    Move(
+                        gid,
+                        Action.FLAG,
+                        MoveKind.RULE,
+                        reasons
+                    )
+                )
             }
             if (stopAfterOne && moves.isNotEmpty()) return
             bit = mask.nextSetBit(bit + 1)

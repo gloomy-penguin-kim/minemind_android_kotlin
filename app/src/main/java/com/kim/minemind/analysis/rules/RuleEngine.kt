@@ -1,6 +1,7 @@
 package com.kim.minemind.analysis.rules
 
 import com.kim.minemind.analysis.frontier.Component
+import com.kim.minemind.shared.MoveList
 import com.kim.minemind.core.board.Board
 
 

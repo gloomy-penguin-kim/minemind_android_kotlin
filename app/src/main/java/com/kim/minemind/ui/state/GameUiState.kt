@@ -17,6 +17,8 @@ data class GameUiState(
     val cells: List<CellUI> = emptyList(),
     val overlay: AnalyzerOverlay? = null,
 
+    val conflicts: Map<Int, MutableSet<String>> = LinkedHashMap(),
+
     val isVerify: Boolean = false,
     val isEnumerate: Boolean = false,
 )

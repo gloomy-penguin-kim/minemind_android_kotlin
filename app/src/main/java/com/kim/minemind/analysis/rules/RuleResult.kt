@@ -1,7 +1,7 @@
 package com.kim.minemind.analysis.rules
 
+import com.kim.minemind.shared.Move
 import com.kim.minemind.core.Action
-import com.kim.minemind.core.board.Board
 
 data class RuleResult (
     val forcedFlags: Set<Int>,

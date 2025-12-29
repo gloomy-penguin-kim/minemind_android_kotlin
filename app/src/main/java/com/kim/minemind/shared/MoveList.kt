@@ -1,13 +1,12 @@
-package com.kim.minemind.analysis.rules
+package com.kim.minemind.shared
 
+import com.kim.minemind.shared.ReasonList
 import com.kim.minemind.core.Action
-import com.kim.minemind.core.MoveKind
 import com.kim.minemind.core.board.Board
 import java.util.BitSet
 
-
 class MoveList(
-    private val board: Board = Board(rows=0, cols=0, mines=0, seed=0),
+    private val board: Board = Board(rows = 0, cols = 0, mines = 0, seed = 0),
     private val stopAfterOne: Boolean = false
 ) {
 
@@ -15,11 +14,10 @@ class MoveList(
     val moves: MutableMap<Int, Move> = LinkedHashMap()
 
     // gid -> set of reasons that conflicted at this gid
-    val conflicts: MutableMap<Int, MutableSet<String>> = LinkedHashMap()
+    val conflicts: MutableMap<Int, ReasonList> = LinkedHashMap()
 
     val forcedFlags: MutableSet<Int> = HashSet()
     val forcedOpens: MutableSet<Int> = HashSet()
-    val conflictsGid: MutableSet<Int> = HashSet()
     val ruleActionByGid: MutableMap<Int, Action> = LinkedHashMap()
 
     fun addMove(mask: BitSet, localToGlobal: IntArray, move: Move) {
@@ -30,8 +28,8 @@ class MoveList(
 
         if (board.cells[gid].isFlagged or board.cells[gid].isRevealed) return
 
-        if (gid in conflictsGid) {
-            addConflict(gid, move)
+        if (gid in conflicts.keys) {
+            addConflict(gid, move.reasons)
             return
         }
 
@@ -52,37 +50,42 @@ class MoveList(
 
         if (existing.action == move.action) {
             if (existing.reasons != move.reasons) {
-                val reasons: MutableList<String> = existing.reasons.toMutableList()
-                reasons.addAll(move.reasons)
-                moves[gid] = Move(existing.gid, existing.action, existing.moveKind, reasons)
+//                val reasons: MutableList<String> = existing.reasons.toMutableList()
+//                reasons.addAll(move.reasons)
+//                moves[gid] = Move(existing.gid, existing.action, existing.moveKind, reasons)
+                existing.reasons.addReasons(move.reasons)
             }
             return
         }
 
 
        // Conflict: record both reasons and remove the move from moves
-        val bucket = conflicts.getOrPut(gid) { LinkedHashSet() }
+        val conflictReasonList  = conflicts.getOrPut(gid) { ReasonList() }
 
-        existing.reasons.forEach { r ->
-            if (!bucket.contains(r)) bucket.add(r)
-        }
-        move.reasons.forEach { r ->
-            if (!bucket.contains(r)) bucket.add(r)
-        }
+        conflictReasonList.addReasons(existing.reasons)
+        conflictReasonList.addReasons(move.reasons)
+
+
+//        existing.reasons.forEach { r ->
+//            if (!bucket.contains(r)) bucket.add(r)
+//        }
+//        move.reasons.forEach { r ->
+//            if (!bucket.contains(r)) bucket.add(r)
+//        }
 
         // add the entire scope to the conflictsGids array so they can be
         // highlighted in the front-end
-        addConflicts(mask, localToGlobal, bucket.toList())
+        addConflicts(mask, localToGlobal, conflictReasonList)
 
         moves.remove(gid)
     }
 
-    fun addConflict(gid: Int, move: Move) {
+    fun addConflict(gid: Int, reasonList: ReasonList) {
         if (board.cells[gid].isFlagged or board.cells[gid].isRevealed) return
 
-        val conflict = conflicts.getOrPut(gid) { LinkedHashSet() }
-        conflict.addAll(move.reasons)
-        conflictsGid.add(gid)
+        val conflict = conflicts.getOrPut(gid) { ReasonList() }
+        conflict.addReasons(reasonList)
+
         if (ruleActionByGid.contains(gid)) {
             ruleActionByGid.remove(gid)
         }
@@ -97,11 +100,11 @@ class MoveList(
         }
     }
 
-    fun addConflicts(mask: BitSet, localToGlobal: IntArray, reasons: List<String>) {
+    fun addConflicts(mask: BitSet, localToGlobal: IntArray, reasonList: ReasonList) {
         var bit = mask.nextSetBit(0)
         while (bit >= 0) {
             val gid = localToGlobal[bit]
-            addConflict(gid, Move(gid, Action.INVALID, MoveKind.RULE, reasons))
+            addConflict(gid, reasonList)
             bit = mask.nextSetBit(bit + 1)
         }
     }

@@ -2,7 +2,7 @@ package com.kim.minemind.analysis
 
 import com.kim.minemind.analysis.frontier.Component
 import com.kim.minemind.analysis.frontier.Constraint
-import com.kim.minemind.analysis.rules.MoveList
+import com.kim.minemind.shared.MoveList
 import com.kim.minemind.analysis.rules.equivalenceRule
 import com.kim.minemind.analysis.rules.singlesRule
 import com.kim.minemind.analysis.rules.subsetsRule

@@ -1,11 +1,9 @@
 package com.kim.minemind.analysis
 
-import com.kim.minemind.analysis.enumeration.ProbabilityEngine
 import com.kim.minemind.analysis.frontier.Component
-import com.kim.minemind.core.*
 import com.kim.minemind.core.board.Board
 import com.kim.minemind.analysis.frontier.Frontier
-import com.kim.minemind.analysis.rules.Move
+import com.kim.minemind.shared.Move
 
 class Solver() {
 

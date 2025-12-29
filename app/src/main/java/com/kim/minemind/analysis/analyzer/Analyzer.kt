@@ -4,13 +4,9 @@ import com.kim.minemind.analysis.enumeration.ProbabilityEngine
 import com.kim.minemind.analysis.frontier.Frontier
 import com.kim.minemind.analysis.analyzer.AnalyzerOverlay
 import com.kim.minemind.analysis.frontier.Component
-import com.kim.minemind.analysis.rules.Move
-import com.kim.minemind.analysis.rules.MoveList
 import com.kim.minemind.analysis.rules.RuleEngine
 import com.kim.minemind.analysis.rules.RuleResult
 import com.kim.minemind.core.board.Board
-import kotlin.Int
-import kotlin.collections.Map
 
 class Analyzer() {
     private val config: AnalysisConfig = AnalysisConfig
@@ -28,10 +24,9 @@ class Analyzer() {
         return AnalyzerOverlay(
             probabilities = probs,
             ruleActions = rules.ruleActionByGid,        // gid -> why/what (optional)
-            conflictsGid = rules.conflictsGid,          // gids to highlight
             forcedFlags = rules.forcedFlags,            // mines proven by rules
             forcedOpens = rules.forcedOpens,            // safe cells proven by rules
-            conflicts = rules.conflicts,
+            conflicts = rules.conflicts.toMutableMap(),
             rules = rules.rules,
         )
     }

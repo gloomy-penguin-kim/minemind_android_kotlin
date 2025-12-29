@@ -1,6 +1,8 @@
 package com.kim.minemind.analysis.rules
 
 import com.kim.minemind.analysis.frontier.Component
+import com.kim.minemind.shared.Move
+import com.kim.minemind.shared.MoveList
 import com.kim.minemind.core.Action
 import com.kim.minemind.core.MoveKind
 import java.util.BitSet
@@ -23,10 +25,13 @@ fun singlesRule (
 
                 moves.addMove((mask.clone() as BitSet),
                             comp.localToGlobal,
-                            Move(gid,
-                            Action.OPEN,
-                            MoveKind.RULE,
-                            listOf("Singles: remaining == 0 are SAFE")))
+                    Move(
+                        gid,
+                        Action.OPEN,
+                        MoveKind.RULE,
+                        listOf("Singles: remaining == 0 are SAFE")
+                    )
+                )
 
                 if (stopAfterOne && moves.isNotEmpty()) {
                     return
@@ -41,10 +46,13 @@ fun singlesRule (
 
                 moves.addMove((mask.clone() as BitSet),
                     comp.localToGlobal,
-                    Move(gid,
+                    Move(
+                        gid,
                         Action.FLAG,
                         MoveKind.RULE,
-                        listOf("Singles: remaining == |scope| are MINES")))
+                        listOf("Singles: remaining == |scope| are MINES")
+                    )
+                )
 
                 if (stopAfterOne && moves.isNotEmpty()) {
                     return

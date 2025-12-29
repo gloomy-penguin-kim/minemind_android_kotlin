@@ -9,14 +9,13 @@ import kotlinx.coroutines.flow.update
 import com.kim.minemind.core.*
 import com.kim.minemind.analysis.Solver
 import com.kim.minemind.analysis.analyzer.AnalyzerOverlay
-import com.kim.minemind.analysis.rules.Move
+import com.kim.minemind.shared.Move
 import com.kim.minemind.core.board.Board
 import com.kim.minemind.core.history.ChangeSet
 import com.kim.minemind.core.history.HistoryEntry
 import com.kim.minemind.core.history.HistoryStack
 
 import android.util.Log
-import kotlinx.coroutines.flow.getAndUpdate
 
 class GameViewModel : ViewModel() {
     companion object {
@@ -67,34 +66,36 @@ class GameViewModel : ViewModel() {
 
         val truthDelta = board.apply(action, gid) // <-- TRUTH ONLY
         Log.d(TAG, "truthDelta = $truthDelta")
-        if (truthDelta.changeSet.empty) return
+        if (truthDelta.empty) return
 
         history.push(
             HistoryEntry(Move(gid, action, MoveKind.USER),
-                                truthDelta.changeSet,
+                                truthDelta,
                                 beforeMoves))
 
         val overlay = if (_uiState.value.isEnumerate) analyzer.analyze(board) else AnalyzerOverlay()
 
-        overlay.conflicts.plus(truthDelta.conflicts)
+//        overlay.conflicts.plus(truthDelta.conflicts)
+        val conflictsCombined = truthDelta.conflicts.plus(overlay.conflicts)
 
         Log.d(TAG, "overlay = $overlay")
         Log.d(TAG, "forcedFlags = ${overlay.forcedFlags}")
         Log.d(TAG, "forcedOpens = ${overlay.forcedOpens}")
-        Log.d(TAG, "conflicts = ${overlay.conflictsGid}")
         Log.d(TAG, "probs = ${overlay.probabilities}")
 
         _uiState.update { s ->
             s.copy(
                 moves = beforeMoves + 1,
-                gameOver = truthDelta.changeSet.gameOver,
-                win = truthDelta.changeSet.win,
+                gameOver = truthDelta.gameOver,
+                win = truthDelta.win,
                 cells = patchCells(
                     base = s.cells,
-                    cs = truthDelta.changeSet,
+                    cs = truthDelta,
                     board = board,
-                    overlay = overlay
+                    overlay = overlay,
+                    conflicts = conflictsCombined
                 ),
+                conflicts = conflictsCombined,
                 overlay = overlay // <-- new overlay
             )
         }
@@ -105,7 +106,8 @@ class GameViewModel : ViewModel() {
         base: List<CellUI>,
         cs: ChangeSet,
         board: Board,
-        overlay: AnalyzerOverlay? = null
+        overlay: AnalyzerOverlay? = null,
+        conflicts: Map<Int, MutableSet<String>> = LinkedHashMap()
     ): List<CellUI> {
         val updated = base.toMutableList()
 
@@ -113,12 +115,12 @@ class GameViewModel : ViewModel() {
             addAll(cs.revealed)
             addAll(cs.flagged)
             addAll(cs.exploded)
+            addAll(conflicts.keys)
 
             if (overlay != null) {
                 // overlay-driven changes
                 addAll(overlay.forcedOpens)
                 addAll(overlay.forcedFlags)
-                addAll(overlay.conflictsGid)
                 addAll(overlay.probabilities.keys)
             }
         }
@@ -136,11 +138,12 @@ class GameViewModel : ViewModel() {
                     isExploded = bc.isExploded,
                     adjacentMines = bc.adjacentMines,
 
+                    conflict = gid in conflicts.keys,
+
                     probability = overlay?.probabilities?.get(gid),
 
                     forcedOpen = gid in (overlay?.forcedOpens ?: emptySet()),
                     forcedFlag = gid in (overlay?.forcedFlags ?: emptySet()),
-                    conflict = gid in (overlay?.conflictsGid ?: emptySet()),
                 )
             }
 
@@ -204,28 +207,28 @@ class GameViewModel : ViewModel() {
 
     fun undo() {
         val entry = history.pop() ?: return
-        val appliedMove = board.undo(entry) // revert truth only
+        val cs: ChangeSet = board.undo(entry) // revert truth only
         val overlay = analyzer.analyze(board)
-        overlay.conflicts.plus(appliedMove.conflicts)
+        val conflictsCombined = cs.conflicts.plus(overlay.conflicts)
 
         Log.d(TAG, "overlay = $overlay")
         Log.d(TAG, "forcedFlags = ${overlay.forcedFlags}")
         Log.d(TAG, "forcedOpens = ${overlay.forcedOpens}")
-        Log.d(TAG, "conflicts = ${overlay.conflictsGid}")
         Log.d(TAG, "probs = ${overlay.probabilities}")
 
         _uiState.update { s ->
             s.copy(
                 moves = entry.moveCountBefore,
+                conflicts = conflictsCombined,
                 gameOver = false,
                 win = false,
-                cells = buildCells(board, overlay),
+                cells = buildCells(board, overlay, cs),
                 overlay = overlay
             )
         }
     }
 
-    private fun buildCells(b: Board, overlay: AnalyzerOverlay? = null): List<CellUI> {
+    private fun buildCells(b: Board, overlay: AnalyzerOverlay? = null, csUndo: ChangeSet? = null): List<CellUI> {
         val out = ArrayList<CellUI>(b.rows * b.cols)
         for (gid in 0 until (b.rows * b.cols)) {
             val bc = b.cells[gid]
@@ -243,7 +246,8 @@ class GameViewModel : ViewModel() {
 
                     forcedOpen = gid in (overlay?.forcedOpens ?: emptySet()),
                     forcedFlag = gid in (overlay?.forcedFlags ?: emptySet()),
-                    conflict = gid in (overlay?.conflictsGid ?: emptySet()),
+
+                    conflict = gid in (csUndo?.conflicts?.keys ?: emptySet()),
                 )
             )
         }
