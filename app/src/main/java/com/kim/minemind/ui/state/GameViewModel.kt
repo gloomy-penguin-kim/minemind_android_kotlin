@@ -40,19 +40,10 @@ class GameViewModel : ViewModel() {
     }
 
     fun newGame(rows: Int, cols: Int, mines: Int) {
-        board = Board(rows, cols, mines, seed = 0)
-
-        _uiState.value = GameUiState(
-            rows = rows,
-            cols = cols,
-            mines = mines,
-            moves = 0,
-            cells = buildCells(board)
-        )
-
         solver.clear()
         analyzer.clear()
         history.clear()
+        board = Board(rows, cols, mines, seed = 0)
         _uiState.value = GameUiState(
             rows = rows,
             cols = cols,
@@ -75,38 +66,32 @@ class GameViewModel : ViewModel() {
         val beforeMoves = _uiState.value.moves
 
         val truthDelta = board.apply(action, gid) // <-- TRUTH ONLY
-        if (truthDelta.empty) return
+        Log.d(TAG, "truthDelta = $truthDelta")
+        if (truthDelta.changeSet.empty) return
 
-        history.push(HistoryEntry(Move(gid, action, MoveKind.USER),truthDelta, beforeMoves))
-        _uiState.update { s ->
-            s.copy(
-                moves = beforeMoves + 1,
-                gameOver = truthDelta.gameOver,
-                win = truthDelta.win,
-                cells = patchCells(
-                    base = s.cells,
-                    cs = truthDelta,
-                    board = board
-                )
-            )
-        }
+        history.push(
+            HistoryEntry(Move(gid, action, MoveKind.USER),
+                                truthDelta.changeSet,
+                                beforeMoves))
 
+        val overlay = if (_uiState.value.isEnumerate) analyzer.analyze(board) else AnalyzerOverlay()
 
-        val overlay = analyzer.analyze(board)
+        overlay.conflicts.plus(truthDelta.conflicts)
 
         Log.d(TAG, "overlay = $overlay")
         Log.d(TAG, "forcedFlags = ${overlay.forcedFlags}")
         Log.d(TAG, "forcedOpens = ${overlay.forcedOpens}")
+        Log.d(TAG, "conflicts = ${overlay.conflictsGid}")
         Log.d(TAG, "probs = ${overlay.probabilities}")
 
         _uiState.update { s ->
             s.copy(
                 moves = beforeMoves + 1,
-                gameOver = truthDelta.gameOver,
-                win = truthDelta.win,
+                gameOver = truthDelta.changeSet.gameOver,
+                win = truthDelta.changeSet.win,
                 cells = patchCells(
                     base = s.cells,
-                    cs = truthDelta,
+                    cs = truthDelta.changeSet,
                     board = board,
                     overlay = overlay
                 ),
@@ -127,12 +112,13 @@ class GameViewModel : ViewModel() {
         val changed = HashSet<Int>().apply {
             addAll(cs.revealed)
             addAll(cs.flagged)
+            addAll(cs.exploded)
 
             if (overlay != null) {
                 // overlay-driven changes
                 addAll(overlay.forcedOpens)
                 addAll(overlay.forcedFlags)
-                addAll(overlay.conflicts)
+                addAll(overlay.conflictsGid)
                 addAll(overlay.probabilities.keys)
             }
         }
@@ -143,25 +129,24 @@ class GameViewModel : ViewModel() {
 
                 updated[gid] = CellUI(
                     gid = gid,
+
                     isMine = bc.isMine,
                     isRevealed = bc.isRevealed,
                     isFlagged = bc.isFlagged,
                     isExploded = bc.isExploded,
                     adjacentMines = bc.adjacentMines,
 
-                    probability = overlay?.probabilities[gid],
+                    probability = overlay?.probabilities?.get(gid),
+
                     forcedOpen = gid in (overlay?.forcedOpens ?: emptySet()),
                     forcedFlag = gid in (overlay?.forcedFlags ?: emptySet()),
-                    conflict = gid in (overlay?.conflicts ?: emptySet()),
+                    conflict = gid in (overlay?.conflictsGid ?: emptySet()),
                 )
             }
 
         // }
 
         return updated
-    }
-    fun info() {
-        setTapMode(TapMode.INFO)
     }
 
     fun handleInfo(gid: Int) {
@@ -187,36 +172,55 @@ class GameViewModel : ViewModel() {
         Log.d(TAG, "probs = ${overlay.probabilities}")
     }
     fun verify() {
-        val overlay = _uiState.value.overlay ?: analyzer.analyze(board, stopAfterOne = true)
-
-
-        Log.d(TAG, "overlay = $overlay")
-        Log.d(TAG, "forcedFlags = ${overlay.forcedFlags}")
-        Log.d(TAG, "forcedOpens = ${overlay.forcedOpens}")
-        Log.d(TAG, "probs = ${overlay.probabilities}")
+        val v = _uiState.value.isVerify
+        _uiState.update { s ->
+            s.copy(
+                isVerify = !v
+            )
+        }
     }
+
     fun enumerate() {
-        val overlay = _uiState.value.overlay ?: analyzer.analyze(board, stopAfterOne = true)
-
-
-        Log.d(TAG, "overlay = $overlay")
-        Log.d(TAG, "forcedFlags = ${overlay.forcedFlags}")
-        Log.d(TAG, "forcedOpens = ${overlay.forcedOpens}")
-        Log.d(TAG, "probs = ${overlay.probabilities}")
+        val e = _uiState.value.isEnumerate
+        if (!e) {
+            val overlay = analyzer.analyze(board)
+            _uiState.update { s ->
+                s.copy(
+                    cells = patchCells(
+                        base = s.cells,
+                        cs = ChangeSet(),
+                        board = board,
+                        overlay = overlay
+                    ),
+                    isEnumerate = true,
+                    overlay = overlay
+                )
+            }
+        }
+        else {
+            _uiState.update { s -> s.copy( isEnumerate = false)}
+        }
     }
 
     fun undo() {
         val entry = history.pop() ?: return
-        board.undo(entry) // revert truth only
-
+        val appliedMove = board.undo(entry) // revert truth only
         val overlay = analyzer.analyze(board)
+        overlay.conflicts.plus(appliedMove.conflicts)
+
+        Log.d(TAG, "overlay = $overlay")
+        Log.d(TAG, "forcedFlags = ${overlay.forcedFlags}")
+        Log.d(TAG, "forcedOpens = ${overlay.forcedOpens}")
+        Log.d(TAG, "conflicts = ${overlay.conflictsGid}")
+        Log.d(TAG, "probs = ${overlay.probabilities}")
 
         _uiState.update { s ->
             s.copy(
                 moves = entry.moveCountBefore,
                 gameOver = false,
                 win = false,
-                cells = buildCells(board, overlay)
+                cells = buildCells(board, overlay),
+                overlay = overlay
             )
         }
     }
@@ -228,13 +232,18 @@ class GameViewModel : ViewModel() {
             out.add(
                 CellUI(
                     gid = gid,
+
                     isMine = bc.isMine,
                     isRevealed = bc.isRevealed,
                     isFlagged = bc.isFlagged,
                     isExploded = bc.isExploded,
                     adjacentMines = bc.adjacentMines,
+
                     probability = overlay?.probabilities?.get(gid),
-                    conflict = overlay?.conflicts?.contains(gid) ?: false,
+
+                    forcedOpen = gid in (overlay?.forcedOpens ?: emptySet()),
+                    forcedFlag = gid in (overlay?.forcedFlags ?: emptySet()),
+                    conflict = gid in (overlay?.conflictsGid ?: emptySet()),
                 )
             )
         }

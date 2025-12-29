@@ -15,7 +15,10 @@ data class GameUiState(
     val win: Boolean = false,
     val tapMode: TapMode = TapMode.OPEN,
     val cells: List<CellUI> = emptyList(),
-    val overlay: AnalyzerOverlay? = null
+    val overlay: AnalyzerOverlay? = null,
+
+    val isVerify: Boolean = false,
+    val isEnumerate: Boolean = false,
 )
 
 data class CellUI(

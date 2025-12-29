@@ -3,8 +3,14 @@ package com.kim.minemind.analysis
 import com.kim.minemind.analysis.enumeration.ProbabilityEngine
 import com.kim.minemind.analysis.frontier.Frontier
 import com.kim.minemind.analysis.analyzer.AnalyzerOverlay
+import com.kim.minemind.analysis.frontier.Component
+import com.kim.minemind.analysis.rules.Move
+import com.kim.minemind.analysis.rules.MoveList
 import com.kim.minemind.analysis.rules.RuleEngine
+import com.kim.minemind.analysis.rules.RuleResult
 import com.kim.minemind.core.board.Board
+import kotlin.Int
+import kotlin.collections.Map
 
 class Analyzer() {
     private val config: AnalysisConfig = AnalysisConfig
@@ -21,10 +27,12 @@ class Analyzer() {
 
         return AnalyzerOverlay(
             probabilities = probs,
-            ruleActions = rules.ruleActionByGid,
+            ruleActions = rules.ruleActionByGid,        // gid -> why/what (optional)
+            conflictsGid = rules.conflictsGid,          // gids to highlight
+            forcedFlags = rules.forcedFlags,            // mines proven by rules
+            forcedOpens = rules.forcedOpens,            // safe cells proven by rules
             conflicts = rules.conflicts,
-            forcedFlags = rules.forcedFlags,
-            forcedOpens = rules.forcedOpens
+            rules = rules.rules,
         )
     }
 
@@ -33,14 +41,12 @@ class Analyzer() {
     }
 
     private fun shouldRunProbabilities(
-        comps: List<com.kim.minemind.analysis.frontier.Component>,
-        rules: com.kim.minemind.analysis.rules.RuleResult
+        comps: List<Component>,
+        rules: RuleResult
     ): Boolean {
-        if (!config.enableProbabilities) return false
-
-        // If rules already found forced moves, probs aren’t needed *yet*
-        if (rules.forcedFlags.isNotEmpty() || rules.forcedOpens.isNotEmpty())
-            return config.runProbabilitiesEvenWhenForced
+//        // If rules already found forced moves, probs aren’t needed *yet*
+//        if (rules.forcedFlags.isNotEmpty() || rules.forcedOpens.isNotEmpty())
+//            return config.runProbabilitiesEvenWhenForced
 
         val totalK = comps.sumOf { it.k }
         if (totalK == 0) return false

@@ -2,11 +2,13 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+
+
 }
 
 android {
     namespace = "com.kim.minemind"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.kim.minemind"
@@ -40,6 +42,9 @@ android {
 }
 
 dependencies {
+    implementation("androidx.compose.foundation:foundation:1.10.0")
+    implementation("androidx.compose.ui:ui-unit:1.10.0")
+    implementation("androidx.compose.animation:animation:1.10.0")
     val composeBom = platform("androidx.compose:compose-bom:2024.09.02")
     implementation(composeBom)
 
@@ -55,4 +60,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-core:latest_version")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
+
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlin:kotlin-test:1.9.0")
 }

@@ -20,10 +20,14 @@ class RuleEngine () {
             if (stopAfterOne && moves.isNotEmpty()) break
         }
 
+
         return RuleResult(
             forcedFlags=moves.forcedFlags,
             forcedOpens=moves.forcedOpens,
             ruleActionByGid=moves.ruleActionByGid,
-            conflicts=moves.conflictsGids)
+            conflictsGid=moves.conflictsGid,
+
+            conflicts = moves.conflicts,
+            rules = moves.moves)
     }
 }

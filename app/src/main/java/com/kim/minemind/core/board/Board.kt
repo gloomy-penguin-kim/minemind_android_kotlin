@@ -41,8 +41,8 @@ class Board(
     fun cell(r: Int, c: Int) = cells[gid(r, c)]
     fun cell(gid: Int) = cells[gid]
 
-    fun apply(action: Action, gid: Int, flagValue: Boolean? = null): ChangeSet {
-        if (gameOver) return ChangeSet()
+    fun apply(action: Action, gid: Int, flagValue: Boolean? = null): AppliedMove {
+        if (gameOver) return AppliedMove(changeSet =  ChangeSet())
 
         if (action == Action.OPEN && !minesPlaced) {
             generateBoard(gid)
@@ -62,7 +62,40 @@ class Board(
         val csCombined = csDelta.merged(csWin)
         Log.d(TAG, "apply = $csCombined")
 
-        return csCombined
+        return AppliedMove(csCombined, changeSetConflicts(csCombined.getAllGid()))
+    }
+
+    fun changeSetConflicts(gids: Set<Int>): MutableMap<Int, MutableSet<String>> {
+        val conflicts: MutableMap<Int, MutableSet<String>> = LinkedHashMap()
+        for (gid in gids) {
+            if (cells[gid].isRevealed && cells[gid].adjacentMines >= 0) {
+                var flaggedNeighbors = 0
+                var unknownNeighbors: MutableList<Int> = mutableListOf()
+
+
+                for (nGid in neighbors(gid)) {
+                    if (cells[nGid].isFlagged) {
+                        flaggedNeighbors += 1
+                    }
+                    else if (!cells[nGid].isRevealed && !cells[nGid].isExploded) {
+                        unknownNeighbors.add(nGid)
+                    }
+
+                }
+                if (flaggedNeighbors > cells[gid].adjacentMines) {
+                    for (unknownGid in unknownNeighbors) {
+                        conflicts[unknownGid] = mutableSetOf("More flags than mines in this scope.")
+                    }
+                }
+                else if (flaggedNeighbors + unknownNeighbors.size < cells[gid].adjacentMines) {
+                    for (unknownGid in unknownNeighbors) {
+                        conflicts[unknownGid] = mutableSetOf("Flagged + unknow < mines in this scope.")
+                    }
+                }
+                Log.d(TAG,"conflicts = $conflicts")
+            }
+        }
+        return conflicts
     }
 
     private fun revealCell(gid: Int): ChangeSet {
@@ -121,14 +154,13 @@ class Board(
 
         for (cell in cells) {
             if (cell.isMine) {
-                cell.isRevealed = true
+                cell.isExploded = true
                 mines.add(cell.gid)
             }
         }
 
         return ChangeSet(
-            revealed = mines,
-            flagged = emptySet(),
+            exploded = mines,
             gameOver = true,
             win = false
         )
@@ -162,6 +194,7 @@ class Board(
         val after = flagValue ?: !before
         if (before == after) return ChangeSet()
         cells[gid].isFlagged = after
+
         return ChangeSet(flagged = setOf(gid))
     }
 
@@ -183,8 +216,8 @@ class Board(
         if (mineCount == flagCount) {
             for (nGid in neighbors(gid)) {
                 if (!cells[nGid].isRevealed and !cells[nGid].isFlagged) {
-                    val csApply: ChangeSet = apply(Action.OPEN, nGid)
-                    cs = cs.merged(csApply)
+                    val csApply: AppliedMove = apply(Action.OPEN, nGid)
+                    cs = cs.merged(csApply.changeSet)
                 }
             }
         }
@@ -193,23 +226,22 @@ class Board(
         return cs
     }
 
-    fun undo(entry: HistoryEntry) {
-        entry.changes.revealed.forEach { gid -> cells[gid].isRevealed = false }
-        entry.changes.flagged.forEach { gid -> cells[gid].isFlagged = false }
+    fun undo(entry: HistoryEntry): AppliedMove {
+        entry.changes.revealed.forEach { gid -> cells[gid].isRevealed = !cells[gid].isRevealed }
+        entry.changes.flagged.forEach { gid -> cells[gid].isFlagged = !cells[gid].isFlagged }
+        entry.changes.exploded.forEach { gid -> cells[gid].isExploded = !cells[gid].isExploded }
+        val conflicts = changeSetConflicts(entry.changes.getAllGid())
         gameOver = false
         win = false
+        return AppliedMove(conflicts = conflicts)
     }
 
     fun isRevealed(gid: Int): Boolean = cells[gid].isRevealed
     fun isRevealedGid(gid: Int): Boolean {
-        val r = gid / cols
-        val c = gid % cols
         return cells[gid].isRevealed
     }
     fun isFlagged(gid: Int): Boolean = cells[gid].isFlagged
     fun isFlaggedGid(gid: Int): Boolean {
-        val r = gid / cols
-        val c = gid % cols
         return cells[gid].isFlagged
     }
 

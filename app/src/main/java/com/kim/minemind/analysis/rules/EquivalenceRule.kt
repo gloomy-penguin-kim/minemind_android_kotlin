@@ -52,8 +52,8 @@ fun equivalenceRule(
                     localToGlobal = comp.localToGlobal,
                     reasons = listOf(
                         "SCOPE_EQUALITY_CONTRADICTION: A==B but remaining differs",
-                        "A=$a rem=$remA",
-                        "B=$b rem=$remB"
+//                        "A=$a rem=$remA",
+//                        "B=$b rem=$remB"
                     )
                 )
                 if (stopAfterOne) return
@@ -69,8 +69,8 @@ fun equivalenceRule(
                         Action.OPEN,
                         listOf(
                             "Equivalence: A⊂B and rem(A)==rem(B) -> B\\A SAFE",
-                            "A=$a rem=$remA subset of",
-                            "B=$b rem=$remB"
+//                            "A=$a rem=$remA subset of",
+//                            "B=$b rem=$remB"
                         )
                     )
                 }
@@ -85,8 +85,8 @@ fun equivalenceRule(
                         Action.OPEN,
                         listOf(
                             "Equivalence: B⊂A and rem(A)==rem(B) -> A\\B SAFE",
-                            "B=$b rem=$remB subset of",
-                            "A=$a rem=$remA"
+//                            "B=$b rem=$remB subset of",
+//                            "A=$a rem=$remA"
                         )
                     )
                 }

@@ -7,19 +7,19 @@ import java.util.BitSet
 
 
 class MoveList(
-    private val board: Board,
+    private val board: Board = Board(rows=0, cols=0, mines=0, seed=0),
     private val stopAfterOne: Boolean = false
 ) {
 
     // gid -> move
-    private val moves: MutableMap<Int, Move> = LinkedHashMap()
+    val moves: MutableMap<Int, Move> = LinkedHashMap()
 
     // gid -> set of reasons that conflicted at this gid
-    private val conflicts: MutableMap<Int, MutableSet<String>> = LinkedHashMap()
+    val conflicts: MutableMap<Int, MutableSet<String>> = LinkedHashMap()
 
     val forcedFlags: MutableSet<Int> = HashSet()
     val forcedOpens: MutableSet<Int> = HashSet()
-    val conflictsGids: MutableSet<Int> = HashSet()
+    val conflictsGid: MutableSet<Int> = HashSet()
     val ruleActionByGid: MutableMap<Int, Action> = LinkedHashMap()
 
     fun addMove(mask: BitSet, localToGlobal: IntArray, move: Move) {
@@ -30,7 +30,7 @@ class MoveList(
 
         if (board.cells[gid].isFlagged or board.cells[gid].isRevealed) return
 
-        if (gid in conflictsGids) {
+        if (gid in conflictsGid) {
             addConflict(gid, move)
             return
         }
@@ -63,12 +63,16 @@ class MoveList(
        // Conflict: record both reasons and remove the move from moves
         val bucket = conflicts.getOrPut(gid) { LinkedHashSet() }
 
-        existing.reasons.firstOrNull()?.let { bucket.add(it) }
-        move.reasons.firstOrNull()?.let { bucket.add(it) }
+        existing.reasons.forEach { r ->
+            if (!bucket.contains(r)) bucket.add(r)
+        }
+        move.reasons.forEach { r ->
+            if (!bucket.contains(r)) bucket.add(r)
+        }
 
         // add the entire scope to the conflictsGids array so they can be
         // highlighted in the front-end
-        addConflicts(mask, localToGlobal, listOf("Other conflicts found in scope"))
+        addConflicts(mask, localToGlobal, bucket.toList())
 
         moves.remove(gid)
     }
@@ -78,15 +82,18 @@ class MoveList(
 
         val conflict = conflicts.getOrPut(gid) { LinkedHashSet() }
         conflict.addAll(move.reasons)
-        conflictsGids.add(gid)
-        if (gid in ruleActionByGid) {
+        conflictsGid.add(gid)
+        if (ruleActionByGid.contains(gid)) {
             ruleActionByGid.remove(gid)
         }
-        if (gid in forcedOpens) {
+        if (forcedOpens.contains(gid)) {
             forcedOpens.remove(gid)
         }
-        if (gid in forcedFlags) {
+        if (forcedFlags.contains(gid)) {
             forcedFlags.remove(gid)
+        }
+        if (moves.contains(gid)) {
+            moves.remove(gid)
         }
     }
 
@@ -105,5 +112,9 @@ class MoveList(
 
     fun isNotEmpty(): Boolean {
         return moves.isNotEmpty()
+    }
+
+    fun barf() {
+
     }
 }

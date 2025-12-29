@@ -1,5 +1,6 @@
 package com.kim.minemind.ui
 
+import android.app.AlertDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
@@ -24,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 
 import com.kim.minemind.core.TopMenuAction
+import com.kim.minemind.core.probabilityBucketFor
 import com.kim.minemind.ui.state.CellUI
 
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -36,15 +38,23 @@ import kotlin.math.min
 // https://material-theme.com/docs/reference/color-palette/
 
 import android.util.Log
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
+import com.kim.minemind.analysis.rules.Move
 import com.kim.minemind.core.TapMode
+import com.kim.minemind.core.probabilityToGlyph
+import com.kim.minemind.ui.state.GameUiState
 
 private const val TAG = "ui.GameViewModel"
 
@@ -90,6 +100,14 @@ fun GameTopBar(
                     text = { Text("Settings") },
                     onClick = { expanded = false; onMenu(TopMenuAction.SETTINGS) }
                 )
+                DropdownMenuItem(
+                    text = { Text("Help") },
+                    onClick = { expanded = false; onMenu(TopMenuAction.HELP) }
+                )
+                DropdownMenuItem(
+                    text = { Text("About") },
+                    onClick = { expanded = false; onMenu(TopMenuAction.ABOUT) }
+                )
             }
         }
     )
@@ -97,158 +115,442 @@ fun GameTopBar(
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-fun GameBottomBar(
-    tapMode: TapMode,
-    onTapMode: (TapMode) -> Unit,
-
-    onInfo: () -> Unit,
-    onUndo: () -> Unit,
-    onStep: () -> Unit,
-    onAuto: () -> Unit,
-    onVerify: () -> Unit,
-    onEnumerate: () -> Unit,
-) {
-    var optionsExpanded by remember { mutableStateOf(false) }
-
-    BottomAppBar {
-
-        // Tap-mode chooser (no Info here)
-        SingleChoiceSegmentedButtonRow {
-            SegmentedButton(
-                selected = tapMode == TapMode.OPEN,
-                onClick = { onTapMode(TapMode.OPEN) },
-                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
-                label = { Text("Open") }
-            )
-            SegmentedButton(
-                selected = tapMode == TapMode.FLAG,
-                onClick = { onTapMode(TapMode.FLAG) },
-                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
-                label = { Text("Flag") }
-            )
-            SegmentedButton(
-                selected = tapMode == TapMode.CHORD,
-                onClick = { onTapMode(TapMode.CHORD) },
-                shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
-                label = { Text("Chord") }
-            )
-        }
-
-        Spacer(Modifier.weight(1f))
-
-        // Optional: keep Undo visible (you said it’s most important)
-        TextButton(onClick = onUndo) { Text("Undo") }
-
-        // Options menu
-        Box {
-            TextButton(onClick = { optionsExpanded = true }) { Text("Options") }
-
-            DropdownMenu(
-                expanded = optionsExpanded,
-                onDismissRequest = { optionsExpanded = false }
-            ) {
-                DropdownMenuItem(
-                    text = { Text("Info") },
-                    onClick = { optionsExpanded = false; onInfo() }
-                )
-                DropdownMenuItem(
-                    text = { Text("Undo") },
-                    onClick = { optionsExpanded = false; onUndo() }
-                )
-                DropdownMenuItem(
-                    text = { Text("Step") },
-                    onClick = { optionsExpanded = false; onStep() }
-                )
-                DropdownMenuItem(
-                    text = { Text("Auto") },
-                    onClick = { optionsExpanded = false; onAuto() }
-                )
-                DropdownMenuItem(
-                    text = { Text("Verify") },
-                    onClick = { optionsExpanded = false; onVerify() }
-                )
-                DropdownMenuItem(
-                    text = { Text("Enumerate") },
-                    onClick = { optionsExpanded = false; onEnumerate() }
-                )
-            }
-        }
-    }
-}
-
-
-
-
-@Composable
-@OptIn(ExperimentalMaterial3Api::class)
 fun GameScreen(vm: GameViewModel) {
     val ui by vm.uiState.collectAsState()
+    var infoGid by remember { mutableStateOf<Int?>(null) }
+    var optionsOpen by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             GameTopBar(
                 moves = ui.moves,
-                timeText = "00:41", // ui.timerText
-                onMenu = { action -> vm.handleTopMenu(action) }
+                timeText = "00:41",
+                onMenu = { vm.handleTopMenu(it) }
             )
         },
-        bottomBar = {
-            GameBottomBar(
-                tapMode = ui.tapMode,
-                onTapMode = vm::setTapMode,
-                onInfo = vm::info,
-                onUndo = vm::undo,
-                onStep = vm::step,
-                onAuto = vm::auto,
+        floatingActionButton = {
+            OptionsFabMenu(
+                ui = ui,
+                expanded = optionsOpen,
+                onExpandedChange = { optionsOpen = it },
+
                 onVerify = vm::verify,
                 onEnumerate = vm::enumerate,
+                onAuto = vm::auto,
+                onStep = vm::step,
+                onUndo = vm::undo,
+
+                onInfo = { vm.setTapMode(TapMode.INFO) },
+                onChord = { vm.setTapMode(TapMode.CHORD) },
+                onFlag = { vm.setTapMode(TapMode.FLAG) },
+                onOpen = { vm.setTapMode(TapMode.OPEN) },
             )
         }
     ) { pad ->
-        Column(modifier = Modifier.padding(pad).padding(12.dp)) {
-            if (ui.gameOver) {
-                Text(
-                    if (ui.win) "You won!" else "Boom. You lost.",
-                    style = MaterialTheme.typography.titleLarge
-                )
-                Spacer(Modifier.height(8.dp))
-            }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(pad)
+        ) {
+            BoardFrame(
+                ui = ui,
+                onCell = { gid ->
+                    when (ui.tapMode) {
+                        TapMode.OPEN -> vm.dispatch(Action.OPEN, gid)
+                        TapMode.FLAG -> vm.dispatch(Action.FLAG, gid)
+                        TapMode.CHORD -> vm.dispatch(Action.CHORD, gid)
+                        TapMode.INFO -> infoGid = gid
+                    }
+                },
+                onCellLongPress = { gid -> vm.dispatch(Action.FLAG, gid) }
+            )
 
-            Box(
+            TapModeRow(
+                tapMode = ui.tapMode,
+                onTapMode = vm::setTapMode,
+                optionsOpen = optionsOpen,
+                onToggleOptions = { optionsOpen = !optionsOpen },
                 modifier = Modifier
-                    .border(4.dp, Color(0xFF282A36), RoundedCornerShape(8.dp))
-                    .padding(4.dp)
-            ) {
-                ZoomPanBoard {
-                    BoardFrame(
-                        rows = ui.rows,
-                        cols = ui.cols,
-                        cells = ui.cells,
-                        onCell = { gid ->
-                            when (ui.tapMode) {
-                                TapMode.OPEN  -> vm.dispatch(Action.OPEN, gid)
-                                TapMode.FLAG  -> vm.dispatch(Action.FLAG, gid)
-                                TapMode.CHORD -> vm.dispatch(Action.CHORD, gid)
-                                TapMode.INFO  -> vm.handleInfo(gid)
-                            }
-                        },
-                        onCellLongPress = { gid -> vm.dispatch(Action.FLAG, gid) }
+                    .align(Alignment.BottomCenter)
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(bottom = 4.dp)
+            )
+
+            // ✅ modal
+            val gid = infoGid
+            if (gid != null) {
+                val cell = ui.cells.firstOrNull { it.gid == gid }
+                if (cell != null) {
+                    CellInfoDialog(
+                        cell = cell,
+                        ui = ui,
+                        onDismiss = { infoGid = null }
                     )
+                } else {
+                    // cell missing for some reason; just close
+                    infoGid = null
                 }
             }
+
+        }
+    }
+}
+
+@Composable
+fun CellInfoDialog(
+    cell: CellUI,
+    ui: GameUiState,
+    onDismiss: () -> Unit
+) {
+    val cols = ui.cols
+    val isEnumerate = ui.isEnumerate
+    val rules = ui.overlay?.rules
+    val conflicts = ui.overlay?.conflicts
+
+    val (r, c) = remember(cell.gid, cols) { divmod(cell.gid, cols) } // helper below
+
+    val probText = when (val p = cell.probability) {
+        null -> "—"
+        else -> "${(p * 100f).coerceIn(0f, 100f).toInt()}%"
+    }
+
+    val statusLines = buildList {
+        add("Location: r=$r, c=$c (gid=${cell.gid})")
+
+        add(
+            when {
+                cell.isRevealed && cell.isMine -> "Revealed: MINE"
+                cell.isRevealed -> "Revealed: ${cell.adjacentMines} adjacent mines"
+                ui.isVerify && cell.isFlagged && cell.isMine-> "Flagged: verified correct"
+                ui.isVerify && cell.isFlagged && !cell.isMine-> "Flagged: verified INCORRECT/conflict"
+                cell.isFlagged -> "Flagged"
+                cell.isExploded -> "Exploded Mine"
+                else -> "Hidden"
+            }
+        )
+
+        if (isEnumerate) {
+            add("Probability: $probText")
+
+            val bucket = probabilityBucketFor(cell.probability)
+            if (bucket != null) {
+                add(
+                    "Bucket: '${bucket.glyph}' " +
+                            "(${(bucket.min * 100).toInt()}–${(bucket.max * 100).toInt()}%)"
+                )
+            }
+
+            if (cell.conflict or (ui.isVerify && cell.isFlagged && !cell.isMine))
+                add("⚠ Conflict: constraints disagree here")
+            if (cell.forcedOpen)
+                add("Rule Open (O): safe in all solutions")
+            if (cell.forcedFlag)
+                add("Rule Flag (X): mine in all solutions")
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Close") }
+        },
+        title = { Text("Cell Info") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                statusLines.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+
+                if (isEnumerate) {
+
+                    if (rules?.contains(cell.gid) == true ) {
+                        Divider()
+                        Text("Matching Rules:", fontWeight = FontWeight.SemiBold)
+                        rules.get(cell.gid)?.reasons?.forEach {
+                            Text("\t- $it", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    if (conflicts?.contains(cell.gid) == true) {
+                        Divider()
+                        Text("Conflicts:", fontWeight = FontWeight.SemiBold)
+                        conflicts.get(cell.gid)?.forEach {
+                            Text("\t- $it", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+
+                Divider()
+                Text("Legend", fontWeight = FontWeight.SemiBold)
+
+                Text(
+                    if (isEnumerate) {
+                        "C = conflict\nO = forced open\nX = forced flag\n0 . , : - ~ = + * # X = probability buckets (low → high)"
+                    } else {
+                        "Turn on Enumerate to see probability/conflict info."
+                    },
+                    style = MaterialTheme.typography.bodySmall
+                )
+
+                Divider()
+
+                Text("Rule notes", fontWeight = FontWeight.SemiBold)
+                Text(
+                    "• Conflicts usually mean the current flagged/revealed state is inconsistent with at least one constraint.\n" +
+                            "• Forced means every valid mine placement for that component agrees.\n" +
+                            "• Probability is local to the enumerated component.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        }
+    )
+}
+
+/*
+what do these two mean?  show entropy instead of raw probability
+
+show component-level probability vs global mine-adjusted
+*/
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CellInfoBottomSheet(
+    cell: CellUI,
+    rows: Int,
+    cols: Int,
+    isEnumerate: Boolean,
+    onDismiss: () -> Unit
+) {
+    val (r, c) = remember(cell.gid, cols) { divmod(cell.gid, cols) }
+    val probPct = cell.probability?.let { (it * 100f).coerceIn(0f, 100f) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        // you can tweak sheet shape/colors via MaterialTheme if desired
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text("Cell Info", style = MaterialTheme.typography.titleLarge)
+
+            Text("r=$r, c=$c (gid=${cell.gid})")
+
+            Text(
+                when {
+                    cell.isRevealed && cell.isMine -> "Revealed: MINE"
+                    cell.isRevealed -> "Revealed: ${cell.adjacentMines} adjacent"
+                    cell.isFlagged -> "Flagged"
+                    else -> "Hidden"
+                }
+            )
+
+            if (isEnumerate) {
+                Text("Probability: ${probPct?.toInt()?.toString() ?: "—"}%")
+                if (cell.conflict) Text("⚠ Conflict: constraints disagree here")
+                if (cell.forcedOpen) Text("Forced Open (O)")
+                if (cell.forcedFlag) Text("Forced Flag (X)")
+            } else {
+                Text("Turn on Enumerate to see probability/conflict info.")
+            }
+
+            Divider()
+
+            Text("Legend", fontWeight = FontWeight.SemiBold)
+            Text(
+                "C = conflict · O = forced open · X = forced flag\n" +
+                        "0 . , : - ~ = + * # X = probability buckets",
+                style = MaterialTheme.typography.bodySmall
+            )
+
+            Spacer(Modifier.height(6.dp))
+
+            Button(
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Close") }
         }
     }
 }
 
 
+private fun divmod(gid: Int, cols: Int): Pair<Int, Int> =
+    Pair(gid / cols, gid % cols)
+
+
+fun handleInfo(gid: Int) {
+   // need a dialog here
+}
+@Composable
+fun TapModeRow(
+    tapMode: TapMode,
+    onTapMode: (TapMode) -> Unit,
+    optionsOpen: Boolean,
+    onToggleOptions: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(20.dp),
+        tonalElevation = 4.dp,
+        shadowElevation = 6.dp,
+        color = Color(0xFF21252B)
+    ) {
+        SingleChoiceSegmentedButtonRow(
+            modifier = Modifier.padding(6.dp)
+        ) {
+            val segmentColors = SegmentedButtonDefaults.colors(
+                activeContainerColor = Color(0xFF444a73),
+                activeContentColor = Color(0xFFD3DAE3),
+                inactiveContainerColor = Color(0xFF21252B),
+                inactiveContentColor = Color(0xFFD3DAE3),
+            )
+
+            SegmentedButton(
+                selected = tapMode == TapMode.OPEN,
+                onClick = { onTapMode(TapMode.OPEN) },
+                shape = SegmentedButtonDefaults.itemShape(0, 5),
+                label = { Text("Open") },
+                colors = segmentColors
+            )
+            SegmentedButton(
+                selected = tapMode == TapMode.FLAG,
+                onClick = { onTapMode(TapMode.FLAG) },
+                shape = SegmentedButtonDefaults.itemShape(1, 5),
+                label = { Text("Flag") },
+                colors = segmentColors
+            )
+            SegmentedButton(
+                selected = tapMode == TapMode.CHORD,
+                onClick = { onTapMode(TapMode.CHORD) },
+                shape = SegmentedButtonDefaults.itemShape(2, 5),
+                label = { Text("Chord") },
+                colors = segmentColors
+            )
+            SegmentedButton(
+                selected = tapMode == TapMode.INFO,
+                onClick = { onTapMode(TapMode.INFO) },
+                shape = SegmentedButtonDefaults.itemShape(3, 5),
+                label = { Text("Info") },
+                colors = segmentColors
+            )
+
+            // 5th "Options" segment
+            SegmentedButton(
+                selected = optionsOpen,
+                onClick = onToggleOptions,
+                shape = SegmentedButtonDefaults.itemShape(4, 5),
+                label = { Text("⋯") },
+                colors = segmentColors
+            )
+        }
+    }
+}
+
+
+
+@Composable
+fun OptionsFabMenu(
+    ui: GameUiState,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+
+    onUndo: () -> Unit,
+    onStep: () -> Unit,
+    onAuto: () -> Unit,
+    onVerify: () -> Unit,
+    onEnumerate: () -> Unit,
+    onInfo: () -> Unit,
+    onChord: () -> Unit,
+    onFlag: () -> Unit,
+    onOpen: () -> Unit,
+) {
+    Column(horizontalAlignment = Alignment.End) {
+
+        AnimatedVisibility(visible = expanded) {
+            Column(horizontalAlignment = Alignment.End) {
+                SmallActionPill(label = if (ui.isVerify) "Verify ✓" else "Verify", selected = ui.isVerify) {
+                    onExpandedChange(false); onVerify()
+                }
+                Spacer(Modifier.height(10.dp))
+                SmallActionPill(label = if (ui.isEnumerate) "Enumerate ✓" else "Enumerate", selected = ui.isEnumerate) {
+                    onExpandedChange(false); onEnumerate()
+                }
+                Spacer(Modifier.height(10.dp))
+                SmallActionPill(label = "Auto") { onExpandedChange(false); onAuto() }
+                Spacer(Modifier.height(10.dp))
+                SmallActionPill(label = "Step") { onExpandedChange(false); onStep() }
+                Spacer(Modifier.height(10.dp))
+                SmallActionPill(label = "Undo") { onExpandedChange(false); onUndo() }
+                Spacer(Modifier.height(55.dp))
+            }
+        }
+
+//        FloatingActionButton(
+//            onClick = { onExpandedChange(!expanded) }
+//        ) {
+//            Text(if (expanded) "×" else "⋯")
+//        }
+    }
+}
+
+
+@Composable
+private fun SmallActionPill(
+    label: String,
+    selected: Boolean = false,
+    onClick: () -> Unit
+) {
+    val segmentColors = SegmentedButtonDefaults.colors(
+        activeContainerColor = Color(0xFF444a73),
+        activeContentColor = Color(0xFFD3DAE3),
+        inactiveContainerColor = Color(0xFF21252B),
+        inactiveContentColor = Color(0xFFD3DAE3),
+    )
+
+    val bg = if (selected) Color(0xFF444A73) else Color(0xFF21252B)
+    val fg = if (selected) Color(0xFFD3DAE3) else Color(0xFFD3DAE3)
+
+    Surface(
+        onClick = onClick,
+        color = bg,
+        contentColor = fg,
+        border = BorderStroke(0.75.dp, Color(0xFF3A3F4B)),
+        shape = RoundedCornerShape(20.dp),
+        tonalElevation = 4.dp,
+        shadowElevation = 6.dp,
+        modifier = Modifier.height(32.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp), // <= your padding control
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.MoreVert,
+                contentDescription = label,
+                modifier = Modifier.size(16.dp)
+            )
+            Text(label, style = MaterialTheme.typography.labelMedium)
+        }
+    }
+}
+
+
+
 @Composable
 fun BoardFrame(
-    rows: Int,
-    cols: Int,
-    cells: List<CellUI>,
+    ui: GameUiState,
     onCell: (Int) -> Unit,
     onCellLongPress: (Int) -> Unit,
 ) {
+    val rows = ui.rows
+    val cols = ui.cols
+    val cells = ui.cells
+
+    val isVerify = ui.isVerify
+    val isEnumerate = ui.isEnumerate
+
     val shape = RoundedCornerShape(8.dp)
     val cellSize = 34.dp
 
@@ -256,7 +558,7 @@ fun BoardFrame(
     val boardH = cellSize * rows
 
     var scale by remember { mutableStateOf(1f) }
-    var offset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
 
     val minScale = 0.6f
     val maxScale = 3.0f
@@ -278,8 +580,8 @@ fun BoardFrame(
         val boardHpx = with(density) { boardH.toPx() }
         val slackPx = with(density) { slackDp.toPx() }
 
-        fun clampOffset(newOffset: androidx.compose.ui.geometry.Offset, newScale: Float)
-                : androidx.compose.ui.geometry.Offset {
+        fun clampOffset(newOffset: Offset, newScale: Float)
+                : Offset {
 
             val scaledW = boardWpx * newScale
             val scaledH = boardHpx * newScale
@@ -311,7 +613,7 @@ fun BoardFrame(
                 0f + viewportH
             }
 
-            return androidx.compose.ui.geometry.Offset(
+            return Offset(
                 x = newOffset.x.coerceIn(minX, maxX),
                 y = newOffset.y.coerceIn(minY, maxY),
             )
@@ -347,6 +649,7 @@ fun BoardFrame(
                 verticalArrangement = Arrangement.spacedBy(0.dp),
             ) {
 
+
                 items(cells, key = { it.gid }) { cell ->
 
                     val bg = when {
@@ -355,6 +658,12 @@ fun BoardFrame(
                         cell.isRevealed and cell.isMine ->
                             // Color(0xFF9B859D) purple
                             Color(0xFF61AEEF)
+                        isVerify && !cell.isMine && cell.isFlagged ->
+                            // Color(0xFF9B859D) purple
+                            Color(0xFFc792ea)
+                        cell.isExploded ->
+                            // Color(0xFF9B859D) purple
+                            Color(0xFFc792ea)
                         cell.isFlagged ->
                             // Color(0xFF9B859D) purple
                             Color(0xFF61AEEF)
@@ -374,40 +683,47 @@ fun BoardFrame(
                             ),
                         contentAlignment = Alignment.Center
                     ) {
-                        val txt = when {
-                            cell.isFlagged && !cell.isRevealed -> "F"
-                            cell.isRevealed && (cell.adjacentMines == -1) -> "@"
-                            cell.isRevealed && (cell.adjacentMines == 0) -> ""
-                            cell.isRevealed && (cell.adjacentMines >= 1) -> cell.adjacentMines.toString()
+                        var txt = ""
 
-                            cell.conflict -> "C"
-                            cell.forcedFlag -> "X"
-                            cell.forcedOpen -> "O"
-
-                            (cell.probability ?: -1.0f) <  0.0f  -> ""
-                            (cell.probability ?: -1.0f) <= 0.05f -> "0"
-                            (cell.probability ?: -1.0f) <= 0.15f -> "."
-                            (cell.probability ?: -1.0f) <= 0.25f -> ","
-                            (cell.probability ?: -1.0f) <= 0.35f -> ":"
-                            (cell.probability ?: -1.0f) <= 0.45f -> "-"
-                            (cell.probability ?: -1.0f) <= 0.55f -> "~"
-                            (cell.probability ?: -1.0f) <= 0.65f -> "="
-                            (cell.probability ?: -1.0f) <= 0.75f -> "+"
-                            (cell.probability ?: -1.0f) <= 0.85f -> "*"
-                            (cell.probability ?: -1.0f) <= 0.95f -> "#"
-                            (cell.probability ?: -1.0f) >  0.95f -> "X"
-                            else -> ""
+                        if (cell.isRevealed) {
+                            if (cell.adjacentMines == 0) {
+                                txt = ""
+                            }
+                            else if (cell.adjacentMines >= 1) {
+                                txt = cell.adjacentMines.toString()
+                            }
                         }
+                        else {
+                            if (cell.isFlagged) {
+                                txt = "F"
+                            }
+                            else if (cell.isExploded) {
+                                txt = "@"
+                            }
+                            else if (isEnumerate) {
+                                txt = when {
+                                    cell.conflict -> "C"
+                                    cell.forcedFlag -> "X"
+                                    cell.forcedOpen -> "O"
+                                    (cell.probability ?: -1.0f) >= 0.0f -> probabilityToGlyph(cell.probability)
+                                    else -> ""
+                                }
+                            }
+                        }
+
                         var textColor = Color(0xFFFFFFFF)
-                        if (cell.probability != null) {
+                        if (isEnumerate && cell.probability != null) {
                             textColor = Color(0xFF9B859D) // purple
                             textColor = Color(0xFF61AEEF) // blue
                         }
-                        if (cell.conflict) {
+                        if (isEnumerate && cell.conflict) {
                             textColor = Color(0xFFc792ea)
                         }
                         if (cell.forcedFlag or cell.forcedOpen) {
                             textColor = Color(0xFFD3DAE3)
+                        }
+                        if (cell.isExploded) {
+                            textColor = Color(0xFFFFFFFF)
                         }
                         Text(txt, color = textColor)
                     }
@@ -417,229 +733,3 @@ fun BoardFrame(
     }
 }
 
-
-
-//private fun visibleGids(cam: Camera, cols: Int): List<Int> {
-//    val out = ArrayList<Int>(cam.viewRows * cam.viewCols)
-//    for (r in cam.topRow until (cam.topRow + cam.viewRows)) {
-//        for (c in cam.leftCol until (cam.leftCol + cam.viewCols)) {
-//            out.add(r * cols + c)
-//        }
-//    }
-//    return out
-//}
-
-@Composable
-fun BoardView(
-    rows: Int,
-    cols: Int,
-    cells: List<CellUI>,
-    onCell: (Int) -> Unit,
-    onCellLongPress: (Int) -> Unit,
-) {
-    val shape = RoundedCornerShape(8.dp)
-    val cellSize = 34.dp
-
-    val boardW = cellSize * cols
-    val boardH = cellSize * rows
-
-    // pan/zoom state
-    var scale by remember { mutableStateOf(1f) }
-    var offset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
-
-    // tune these
-    val minScale = 0.6f
-    val maxScale = 3.0f
-
-    BoxWithConstraints(
-        modifier = Modifier
-            .border(4.dp, Color(0xFF282A36), shape)
-            .clip(shape)                 // IMPORTANT: clip to border/frame
-            .background(Color(0xFF111318))
-    ) {
-        val viewportW = constraints.maxWidth.toFloat()
-        val viewportH = constraints.maxHeight.toFloat()
-
-        // convert board size to px for clamping
-        val density = LocalDensity.current
-        val boardWpx = with(density) { boardW.toPx() }
-        val boardHpx = with(density) { boardH.toPx() }
-
-        fun clampOffset(newOffset: androidx.compose.ui.geometry.Offset, newScale: Float)
-                : androidx.compose.ui.geometry.Offset {
-
-            val scaledW = boardWpx * newScale
-            val scaledH = boardHpx * newScale
-
-            // We allow panning, but keep *some* of the board visible.
-            // If board smaller than viewport, center it.
-            val minX = if (scaledW <= viewportW) (viewportW - scaledW) / 2f else viewportW - scaledW
-            val maxX = if (scaledW <= viewportW) (viewportW - scaledW) / 2f else 0f
-
-            val minY = if (scaledH <= viewportH) (viewportH - scaledH) / 2f else viewportH - scaledH
-            val maxY = if (scaledH <= viewportH) (viewportH - scaledH) / 2f else 0f
-
-            return androidx.compose.ui.geometry.Offset(
-                x = newOffset.x.coerceIn(minX, maxX),
-                y = newOffset.y.coerceIn(minY, maxY),
-            )
-        }
-
-        // gesture layer
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(Unit) {
-                    detectTransformGestures { _, pan, zoom, _ ->
-                        val newScale = (scale * zoom).coerceIn(minScale, maxScale)
-                        val newOffset = offset + pan
-                        scale = newScale
-                        offset = clampOffset(newOffset, newScale)
-                    }
-                }
-        ) {
-            // transformed content (grid)
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(cols),
-                userScrollEnabled = false, // we pan manually
-                modifier = Modifier
-                    // CRITICAL: give the grid its natural size so it doesn't squish
-                    .requiredSize(boardW, boardH)
-                    .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                        translationX = offset.x
-                        translationY = offset.y
-                    },
-                horizontalArrangement = Arrangement.spacedBy(0.dp),
-                verticalArrangement = Arrangement.spacedBy(0.dp),
-            ) {
-                items(cells, key = { it.gid }) { cell ->
-
-                    val bg = when {
-                        cell.isRevealed and !cell.isMine ->
-                            Color(0xFF4D515D)
-                        cell.isRevealed and cell.isMine ->
-                            // Color(0xFF9B859D) purple
-                            Color(0xFF61AEEF)
-                        cell.isFlagged ->
-                            // Color(0xFF9B859D) purple
-                            Color(0xFF61AEEF)
-                        else ->
-                            Color(0xFF282C34)
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .size(cellSize)
-                            .padding(0.dp)
-                            .border(1.dp, Color(0xFF282C34))
-                            .background(bg)
-                            .combinedClickable(
-                                onClick = { onCell(cell.gid) },
-                                onLongClick = { onCellLongPress(cell.gid) }
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        val txt = when {
-                            cell.isFlagged && !cell.isRevealed -> "F"
-                            cell.isRevealed && (cell.adjacentMines == -1) -> "@"
-                            cell.isRevealed && (cell.adjacentMines == 0) -> ""
-                            cell.isRevealed && (cell.adjacentMines >= 1) -> cell.adjacentMines.toString()
-
-                            cell.conflict -> "C"
-                            cell.forcedFlag -> "X"
-                            cell.forcedOpen -> "O"
-
-                            (cell.probability ?: -1.0f) <  0.0f  -> ""
-                            (cell.probability ?: -1.0f) <= 0.05f -> "0"
-                            (cell.probability ?: -1.0f) <= 0.15f -> "."
-                            (cell.probability ?: -1.0f) <= 0.25f -> ","
-                            (cell.probability ?: -1.0f) <= 0.35f -> ":"
-                            (cell.probability ?: -1.0f) <= 0.45f -> "-"
-                            (cell.probability ?: -1.0f) <= 0.55f -> "~"
-                            (cell.probability ?: -1.0f) <= 0.65f -> "="
-                            (cell.probability ?: -1.0f) <= 0.75f -> "+"
-                            (cell.probability ?: -1.0f) <= 0.85f -> "*"
-                            (cell.probability ?: -1.0f) <= 0.95f -> "#"
-                            (cell.probability ?: -1.0f) >  0.95f -> "X"
-
-                            else -> ""
-                        }
-                        var textColor = Color(0xFFFFFFFF)
-                        if (cell.probability != null) {
-                            textColor = Color(0xFF9B859D) // purple
-                            textColor = Color(0xFF61AEEF) // blue
-                        }
-                        if (cell.conflict) {
-                            textColor = Color(0xFFc792ea)
-                        }
-                        if (cell.forcedFlag or cell.forcedOpen) {
-                            textColor = Color(0xFFD3DAE3)
-                        }
-                        Text(txt, color = textColor)
-                    }
-                }
-            }
-        }
-    }
-}
-
-
-@Composable
-fun CellView(cell: CellUI, onCell: (Int)->Unit) {
-    Box(
-        modifier = Modifier
-            .size(32.dp)
-            .background(Color(0xFF44475A))
-            .clickable { onCell(cell.gid) },
-        contentAlignment = Alignment.Center
-    ) {
-        Text(cell.adjacentMines.takeIf { it > 0 }?.toString() ?: "",
-            color = Color(0xFF8BE9FD))
-    }
-}
-
-
-@Composable
-fun ZoomPanBoard(
-    content: @Composable () -> Unit
-) {
-    var scale by remember { mutableStateOf(1f) }
-    var offsetX by remember { mutableStateOf(0f) }
-    var offsetY by remember { mutableStateOf(0f) }
-
-    val minScale = 0.6f
-    val maxScale = 3.0f
-
-    Box(
-        modifier = Modifier
-            .pointerInput(Unit) {
-                detectTransformGestures { _, pan, zoom, _ ->
-                    scale = (scale * zoom).coerceIn(minScale, maxScale)
-                    offsetX += pan.x
-                    offsetY += pan.y
-                }
-            }
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-                translationX = offsetX
-                translationY = offsetY
-                // rotationZ = -2.5f // optional “slight angle”
-            }
-    ) {
-        content()
-    }
-}
-
-
-
-private fun probToBg(
-    p: Float,                 // 0.0 .. 1.0
-    base: Color,              // background for 0%
-    hot: Color,               // background for 100%
-): Color {
-    val t = p.coerceIn(0f, 1f)
-    return lerp(base, hot, t)
-}

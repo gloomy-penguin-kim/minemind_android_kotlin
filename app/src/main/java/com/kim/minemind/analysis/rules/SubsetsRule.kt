@@ -69,8 +69,8 @@ fun subsetsRule (
                 if (remA == remB) {
                     val reasons = listOf(
                         "Subset: A⊆B, a==b -> B\\A SAFE",
-                        "${a} is a subset of",
-                        "${b}"
+//                        "${a} is a subset of",
+//                        "${b}"
                     )
                     processMovesForMask((diff.clone() as BitSet), Action.OPEN, reasons)
                     if (stopAfterOne && moves.isNotEmpty()) return
@@ -79,8 +79,8 @@ fun subsetsRule (
                 else if (remB - remA == diffSize) {
                     val reasons = listOf(
                         "Subset: A⊆B, b-a==|B\\A| -> B\\A MINES",
-                        "${a} is a subset of",
-                        "${b}"
+//                        "${a} is a subset of",
+//                        "${b}"
                     )
 
                     processMovesForMask((diff.clone() as BitSet), Action.FLAG, reasons)
@@ -98,8 +98,8 @@ fun subsetsRule (
                 if (remA == remB) {
                     val reasons = listOf(
                         "Subset: B⊆A, a==b -> A\\B SAFE",
-                        "${b} is a subset of",
-                        "${a}"
+//                        "${b} is a subset of",
+//                        "${a}"
                     )
                     processMovesForMask((diff.clone() as BitSet), Action.OPEN, reasons)
                     if (stopAfterOne && moves.isNotEmpty()) return
@@ -108,8 +108,8 @@ fun subsetsRule (
                 else if (remA - remB == diffSize) {
                     val reasons = listOf(
                         "Subset: B⊆A, a-b==|A\\B| -> A\\B MINES",
-                        "${b} is a subset of",
-                        "${a}"
+//                        "${b} is a subset of",
+//                        "${a}"
                     )
 
                     processMovesForMask((diff.clone() as BitSet), Action.FLAG, reasons)
