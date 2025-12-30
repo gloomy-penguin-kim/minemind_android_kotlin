@@ -2,7 +2,7 @@ package com.kim.minemind.analysis
 
 import com.kim.minemind.analysis.frontier.Component
 import com.kim.minemind.analysis.frontier.Constraint
-import com.kim.minemind.shared.MoveList
+import com.kim.minemind.analysis.rules.RuleAggregator
 import com.kim.minemind.analysis.rules.equivalenceRule
 import com.kim.minemind.analysis.rules.singlesRule
 import com.kim.minemind.analysis.rules.subsetsRule
@@ -31,7 +31,7 @@ class RulesTest {
             localToGlobal = localToGlobal
         )
 
-        val moves = MoveList(board, stopAfterOne = false)
+        val moves = RuleAggregator(board, stopAfterOne = false)
 
         equivalenceRule(comp, moves, stopAfterOne = false)
 
@@ -56,7 +56,7 @@ class RulesTest {
             localToGlobal = localToGlobal
         )
 
-         val moves = MoveList(board, stopAfterOne = false)
+         val moves = RuleAggregator(board, stopAfterOne = false)
         singlesRule(comp, moves, stopAfterOne = false)
 
         assertTrue(moves.forcedOpens.size == 2)
@@ -82,7 +82,7 @@ class RulesTest {
             localToGlobal = localToGlobal
         )
 
-        val moves = MoveList(board, stopAfterOne = false)
+        val moves = RuleAggregator(board, stopAfterOne = false)
         singlesRule(comp, moves, stopAfterOne = false)
 
         assertTrue(moves.forcedFlags.size == 2)
@@ -110,7 +110,7 @@ class RulesTest {
             localToGlobal = localToGlobal
         )
 
-        val moves = MoveList(board, stopAfterOne = false)
+        val moves = RuleAggregator(board, stopAfterOne = false)
         subsetsRule(comp, moves, stopAfterOne = false)
 
         assertTrue(moves.forcedOpens.size == 1)
@@ -137,7 +137,7 @@ class RulesTest {
             localToGlobal = localToGlobal
         )
 
-        val moves = MoveList(board, stopAfterOne = false)
+        val moves = RuleAggregator(board, stopAfterOne = false)
         subsetsRule(comp, moves, stopAfterOne = false)
 
         assertTrue(moves.forcedFlags.size == 1)
@@ -164,7 +164,7 @@ class RulesTest {
             localToGlobal = localToGlobal
         )
 
-        val moves = MoveList(board, stopAfterOne = true)
+        val moves = RuleAggregator(board, stopAfterOne = true)
         subsetsRule(comp, moves, stopAfterOne = true)
 
         assertTrue(moves.forcedFlags.size == 1)
@@ -189,7 +189,7 @@ class RulesTest {
             localToGlobal = localToGlobal
         )
 
-        val moves = MoveList(board, stopAfterOne = true)
+        val moves = RuleAggregator(board, stopAfterOne = true)
         singlesRule(comp, moves, stopAfterOne = true)
 
         assertTrue(moves.forcedFlags.size == 1)

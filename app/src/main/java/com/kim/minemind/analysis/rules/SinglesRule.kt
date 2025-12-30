@@ -2,14 +2,15 @@ package com.kim.minemind.analysis.rules
 
 import com.kim.minemind.analysis.frontier.Component
 import com.kim.minemind.shared.Move
-import com.kim.minemind.shared.MoveList
+import com.kim.minemind.analysis.rules.RuleAggregator
 import com.kim.minemind.core.Action
 import com.kim.minemind.core.MoveKind
+import com.kim.minemind.shared.ReasonList
 import java.util.BitSet
 
 fun singlesRule (
     comp: Component,
-    moves: MoveList,
+    moves: RuleAggregator,
     stopAfterOne: Boolean,
 ) {
     for (constraint in comp.constraints) {
@@ -29,7 +30,7 @@ fun singlesRule (
                         gid,
                         Action.OPEN,
                         MoveKind.RULE,
-                        listOf("Singles: remaining == 0 are SAFE")
+                        ReasonList(initReasons = listOf("Singles: remaining == 0 are SAFE"))
                     )
                 )
 
@@ -50,7 +51,7 @@ fun singlesRule (
                         gid,
                         Action.FLAG,
                         MoveKind.RULE,
-                        listOf("Singles: remaining == |scope| are MINES")
+                        ReasonList(initReasons = listOf("Singles: remaining == |scope| are MINES"))
                     )
                 )
 

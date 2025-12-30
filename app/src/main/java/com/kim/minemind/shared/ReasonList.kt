@@ -1,8 +1,11 @@
 package com.kim.minemind.shared
 
 class ReasonList (
+    val initReason: String = "",
+    val initReasons: List<String> = emptyList()
 ) {
-    private var reasons: MutableList<String> = mutableListOf()
+    private var reasons: MutableList<String> = if (initReason.isNotEmpty()) mutableListOf(initReason) else
+        if (initReasons.isNotEmpty()) initReasons.toMutableList() else mutableListOf()
 
     fun addReasons(rList: List<String>) {
         for (r in rList) {

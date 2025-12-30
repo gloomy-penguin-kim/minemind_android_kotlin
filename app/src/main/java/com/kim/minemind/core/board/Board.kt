@@ -4,6 +4,9 @@ import android.util.Log
 import com.kim.minemind.core.Action
 import com.kim.minemind.core.history.ChangeSet
 import com.kim.minemind.core.history.HistoryEntry
+import com.kim.minemind.shared.ConflictDelta
+import com.kim.minemind.shared.ConflictList
+import com.kim.minemind.shared.ReasonList
 
 class Board(
     val rows: Int,
@@ -61,42 +64,56 @@ class Board(
         val csWin = checkWinCondition()
         val csCombined = csDelta.merged(csWin)
         Log.d(TAG, "apply = $csCombined")
-        changeSetConflicts(csCombined)
 
         return csCombined
     }
 
-    fun changeSetConflicts(cs: ChangeSet): ChangeSet {
-        val conflicts: MutableMap<Int, MutableSet<String>> = LinkedHashMap()
-        for (gid in cs.getAllGid()) {
-            if (cells[gid].isRevealed && cells[gid].adjacentMines >= 0) {
-                var flaggedNeighbors = 0
-                var unknownNeighbors: MutableList<Int> = mutableListOf()
+    fun numberOfFlaggedAndUnknownNeighbors(gid: Int): IntArray {
+        var flaggedNeighbors = 0
+        var unknownNeighbors = 0
+        for (nGid in neighbors(gid)) {
+            if (cells[nGid].isFlagged) {
+                flaggedNeighbors += 1
+            }
+            if (!cells[nGid].isFlagged && !cells[nGid].isRevealed && !cells[nGid].isExploded) {
+                unknownNeighbors += 1
+            }
+            Log.d(TAG, "cell = ${cells[nGid]}, unknown = $unknownNeighbors")
+        }
+        return intArrayOf(flaggedNeighbors, unknownNeighbors)
+    }
 
+    fun conflictsByGid(gids: Set<Int>): ConflictDelta {
+        val conflictDelta = ConflictDelta()
 
-                for (nGid in neighbors(gid)) {
-                    if (cells[nGid].isFlagged) {
-                        flaggedNeighbors += 1
-                    }
-                    else if (!cells[nGid].isRevealed && !cells[nGid].isExploded) {
-                        unknownNeighbors.add(nGid)
-                    }
+        Log.d(TAG, "conflictsByGid = $gids")
 
-                }
-                if (flaggedNeighbors > cells[gid].adjacentMines) {
-                    for (unknownGid in unknownNeighbors) {
-                        conflicts[unknownGid] = mutableSetOf("More flags than mines in this scope.")
+        for (gid in gids) {
+            val cell = cells[gid]
+
+            val checkNeighborsAndSelf = neighbors(gid).toMutableList()
+            if (!cell.isFlagged)
+                checkNeighborsAndSelf.add(gid)
+
+            for (nGid in checkNeighborsAndSelf) {
+                val nCell = cells[nGid]
+                if (nCell.isRevealed && !nCell.isExploded && !nCell.isFlagged) {
+                    val (flagged, unknown) = numberOfFlaggedAndUnknownNeighbors(nGid)
+                    if (flagged > nCell.adjacentMines) {
+                        conflictDelta.upserts.addConflict(nGid, "Too many flags in this scope")
+                    }
+                    else if (flagged + unknown < nCell.adjacentMines) {
+                        conflictDelta.upserts.addConflict(nGid, "Flagged + unknown < mines in this scope.")
+                    }
+                    else {
+                        conflictDelta.removes += nGid
                     }
                 }
-                else if (flaggedNeighbors + unknownNeighbors.size < cells[gid].adjacentMines) {
-                    for (unknownGid in unknownNeighbors) {
-                        conflicts[unknownGid] = mutableSetOf("Flagged + unknow < mines in this scope.")
-                    }
-                }
-                Log.d(TAG,"conflicts = $conflicts")
+                else conflictDelta.removes += nGid
             }
         }
-        return ChangeSet(conflicts = conflicts)
+        Log.d(TAG, "conflictDelta = $conflictDelta")
+        return conflictDelta
     }
 
     private fun revealCell(gid: Int): ChangeSet {
@@ -148,7 +165,6 @@ class Board(
         }
         return ChangeSet(revealed = revealedSet)
     }
-
 
     private fun loseCondition(): ChangeSet {
         val mines = mutableSetOf<Int>()
@@ -203,7 +219,6 @@ class Board(
 
         val mineCount = cells[gid].adjacentMines
         var flagCount = 0
-
         for (nGid in neighbors(gid)) {
             if (cells[nGid].isFlagged) {
                 flagCount += 1
@@ -212,12 +227,14 @@ class Board(
         Log.d(TAG, "chord = $mineCount, $flagCount")
         val revealed: MutableSet<Int> = mutableSetOf()
         var cs = ChangeSet()
-
         if (mineCount == flagCount) {
             for (nGid in neighbors(gid)) {
                 if (!cells[nGid].isRevealed and !cells[nGid].isFlagged) {
-                    val csApply: ChangeSet = apply(Action.OPEN, nGid)
-                    cs = cs.merged(csApply)
+//                    val appliedMove = apply(Action.OPEN, nGid)
+//                    cs = cs.merged(appliedMove.changeSet)
+                    val csReveal = revealCell(nGid)
+                    cs = cs.merged(csReveal)
+                    revealed.add(nGid)
                 }
             }
         }
@@ -226,14 +243,12 @@ class Board(
         return cs
     }
 
-    fun undo(entry: HistoryEntry): ChangeSet {
+    fun undo(entry: HistoryEntry) {
         entry.changes.revealed.forEach { gid -> cells[gid].isRevealed = !cells[gid].isRevealed }
         entry.changes.flagged.forEach { gid -> cells[gid].isFlagged = !cells[gid].isFlagged }
         entry.changes.exploded.forEach { gid -> cells[gid].isExploded = !cells[gid].isExploded }
-        val conflicts = changeSetConflicts(entry.changes)
         gameOver = false
         win = false
-        return conflicts
     }
 
     fun isRevealed(gid: Int): Boolean = cells[gid].isRevealed

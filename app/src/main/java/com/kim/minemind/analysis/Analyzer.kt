@@ -1,9 +1,9 @@
 package com.kim.minemind.analysis
 
+import com.kim.minemind.analysis.AnalyzerOverlay
 import com.kim.minemind.analysis.enumeration.ProbabilityEngine
-import com.kim.minemind.analysis.frontier.Frontier
-import com.kim.minemind.analysis.analyzer.AnalyzerOverlay
 import com.kim.minemind.analysis.frontier.Component
+import com.kim.minemind.analysis.frontier.Frontier
 import com.kim.minemind.analysis.rules.RuleEngine
 import com.kim.minemind.analysis.rules.RuleResult
 import com.kim.minemind.core.board.Board
@@ -23,11 +23,13 @@ class Analyzer() {
 
         return AnalyzerOverlay(
             probabilities = probs,
+
             ruleActions = rules.ruleActionByGid,        // gid -> why/what (optional)
             forcedFlags = rules.forcedFlags,            // mines proven by rules
             forcedOpens = rules.forcedOpens,            // safe cells proven by rules
-            conflicts = rules.conflicts.toMutableMap(),
-            rules = rules.rules,
+
+            conflictProbs = rules.conflictList,
+            ruleList = rules.ruleList,
         )
     }
 
@@ -57,4 +59,3 @@ class Analyzer() {
         return true
     }
 }
-

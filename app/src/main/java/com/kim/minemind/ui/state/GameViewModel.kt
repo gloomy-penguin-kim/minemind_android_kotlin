@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import com.kim.minemind.core.*
 import com.kim.minemind.analysis.Solver
-import com.kim.minemind.analysis.analyzer.AnalyzerOverlay
+import com.kim.minemind.analysis.AnalyzerOverlay
 import com.kim.minemind.shared.Move
 import com.kim.minemind.core.board.Board
 import com.kim.minemind.core.history.ChangeSet
@@ -16,6 +16,9 @@ import com.kim.minemind.core.history.HistoryEntry
 import com.kim.minemind.core.history.HistoryStack
 
 import android.util.Log
+import com.kim.minemind.core.board.AppliedMove
+import com.kim.minemind.shared.ConflictDelta
+import com.kim.minemind.shared.ConflictList
 
 class GameViewModel : ViewModel() {
     companion object {
@@ -64,39 +67,38 @@ class GameViewModel : ViewModel() {
     fun dispatch(action: Action, gid: Int) {
         val beforeMoves = _uiState.value.moves
 
-        val truthDelta = board.apply(action, gid) // <-- TRUTH ONLY
-        Log.d(TAG, "truthDelta = $truthDelta")
-        if (truthDelta.empty) return
-
+        val cs = board.apply(action, gid) // <-- TRUTH ONLY
+        Log.d(TAG, "cs = $cs")
+        if (cs.empty) return
         history.push(
             HistoryEntry(Move(gid, action, MoveKind.USER),
-                                truthDelta,
-                                beforeMoves))
+                cs,
+                beforeMoves))
 
         val overlay = if (_uiState.value.isEnumerate) analyzer.analyze(board) else AnalyzerOverlay()
-
-//        overlay.conflicts.plus(truthDelta.conflicts)
-        val conflictsCombined = truthDelta.conflicts.plus(overlay.conflicts)
+        val conflictDelta: ConflictDelta = if (_uiState.value.isEnumerate) board.conflictsByGid(cs.getAllGid()) else ConflictDelta()
+        val conflictBoard = _uiState.value.conflictBoard.applyDelta(conflictDelta)
 
         Log.d(TAG, "overlay = $overlay")
-        Log.d(TAG, "forcedFlags = ${overlay.forcedFlags}")
-        Log.d(TAG, "forcedOpens = ${overlay.forcedOpens}")
-        Log.d(TAG, "probs = ${overlay.probabilities}")
+        Log.d(TAG, "overlay.conflictProbs = ${overlay.conflictProbs}")
+        Log.d(TAG, "conflictBoard = ${conflictBoard}")
 
         _uiState.update { s ->
             s.copy(
                 moves = beforeMoves + 1,
-                gameOver = truthDelta.gameOver,
-                win = truthDelta.win,
+                gameOver = cs.gameOver,
+                win = cs.win,
                 cells = patchCells(
                     base = s.cells,
-                    cs = truthDelta,
+                    cs = cs,
                     board = board,
                     overlay = overlay,
-                    conflicts = conflictsCombined
+                    conflictsBoard = conflictBoard,
+                    clearConflicts = conflictDelta.removes
                 ),
-                conflicts = conflictsCombined,
-                overlay = overlay // <-- new overlay
+                ruleList = overlay.ruleList,
+                conflictBoard = conflictBoard,
+                conflictProbs = overlay.conflictProbs
             )
         }
     }
@@ -106,8 +108,9 @@ class GameViewModel : ViewModel() {
         base: List<CellUI>,
         cs: ChangeSet,
         board: Board,
-        overlay: AnalyzerOverlay? = null,
-        conflicts: Map<Int, MutableSet<String>> = LinkedHashMap()
+        overlay: AnalyzerOverlay,
+        conflictsBoard: ConflictList = ConflictList(),
+        clearConflicts: Set<Int> = emptySet()
     ): List<CellUI> {
         val updated = base.toMutableList()
 
@@ -115,64 +118,46 @@ class GameViewModel : ViewModel() {
             addAll(cs.revealed)
             addAll(cs.flagged)
             addAll(cs.exploded)
-            addAll(conflicts.keys)
 
-            if (overlay != null) {
-                // overlay-driven changes
-                addAll(overlay.forcedOpens)
-                addAll(overlay.forcedFlags)
-                addAll(overlay.probabilities.keys)
-            }
+            addAll(conflictsBoard.keys)
+
+            addAll(overlay.conflictProbs.keys)
+            addAll(overlay.forcedOpens)
+            addAll(overlay.forcedFlags)
+            addAll(overlay.probabilities.keys)
+
+            addAll(clearConflicts)
         }
 
-        // for (gid in changed) {
-            for (gid in changed) {
-                val bc = board.cells[gid]
+        for (gid in changed) {
+            val bc = board.cells[gid]
 
-                updated[gid] = CellUI(
-                    gid = gid,
+            updated[gid] = CellUI(
+                gid = gid,
 
-                    isMine = bc.isMine,
-                    isRevealed = bc.isRevealed,
-                    isFlagged = bc.isFlagged,
-                    isExploded = bc.isExploded,
-                    adjacentMines = bc.adjacentMines,
+                isMine = bc.isMine,
+                isRevealed = bc.isRevealed,
+                isFlagged = bc.isFlagged,
+                isExploded = bc.isExploded,
+                adjacentMines = bc.adjacentMines,
 
-                    conflict = gid in conflicts.keys,
+                conflict = (gid in overlay.conflictProbs.keys) or (gid in conflictsBoard.keys),
 
-                    probability = overlay?.probabilities?.get(gid),
+                probability = overlay.probabilities.get(gid),
 
-                    forcedOpen = gid in (overlay?.forcedOpens ?: emptySet()),
-                    forcedFlag = gid in (overlay?.forcedFlags ?: emptySet()),
-                )
-            }
-
-        // }
+                forcedOpen = gid in (overlay.forcedOpens),
+                forcedFlag = gid in (overlay.forcedFlags)
+            )
+        }
 
         return updated
     }
 
-    fun handleInfo(gid: Int) {
-
-    }
-
     fun step() {
-        val overlay = _uiState.value.overlay ?: analyzer.analyze(board, stopAfterOne = true)
 
-
-        Log.d(TAG, "overlay = $overlay")
-        Log.d(TAG, "forcedFlags = ${overlay.forcedFlags}")
-        Log.d(TAG, "forcedOpens = ${overlay.forcedOpens}")
-        Log.d(TAG, "probs = ${overlay.probabilities}")
     }
     fun auto() {
-        val overlay = _uiState.value.overlay ?: analyzer.analyze(board, stopAfterOne = true)
 
-
-        Log.d(TAG, "overlay = $overlay")
-        Log.d(TAG, "forcedFlags = ${overlay.forcedFlags}")
-        Log.d(TAG, "forcedOpens = ${overlay.forcedOpens}")
-        Log.d(TAG, "probs = ${overlay.probabilities}")
     }
     fun verify() {
         val v = _uiState.value.isVerify
@@ -187,6 +172,10 @@ class GameViewModel : ViewModel() {
         val e = _uiState.value.isEnumerate
         if (!e) {
             val overlay = analyzer.analyze(board)
+
+            val n = (0..((board.rows * board.cols)-1)).toSet()
+            val conflictBoard: ConflictDelta = board.conflictsByGid(n)
+
             _uiState.update { s ->
                 s.copy(
                     cells = patchCells(
@@ -196,7 +185,9 @@ class GameViewModel : ViewModel() {
                         overlay = overlay
                     ),
                     isEnumerate = true,
-                    overlay = overlay
+                    ruleList = overlay.ruleList,
+                    conflictBoard = conflictBoard.upserts,
+                    conflictProbs = overlay.conflictProbs
                 )
             }
         }
@@ -207,28 +198,42 @@ class GameViewModel : ViewModel() {
 
     fun undo() {
         val entry = history.pop() ?: return
-        val cs: ChangeSet = board.undo(entry) // revert truth only
-        val overlay = analyzer.analyze(board)
-        val conflictsCombined = cs.conflicts.plus(overlay.conflicts)
 
-        Log.d(TAG, "overlay = $overlay")
-        Log.d(TAG, "forcedFlags = ${overlay.forcedFlags}")
-        Log.d(TAG, "forcedOpens = ${overlay.forcedOpens}")
-        Log.d(TAG, "probs = ${overlay.probabilities}")
+        board.undo(entry) // revert truth only
+
+        var overlay = AnalyzerOverlay()
+        var conflictDelta = ConflictDelta()
+
+        if (_uiState.value.isEnumerate) {
+            overlay = analyzer.analyze(board)
+            val n = (0..((board.rows * board.cols)-1)).toSet()
+            conflictDelta = board.conflictsByGid(n)
+        }
+
 
         _uiState.update { s ->
             s.copy(
                 moves = entry.moveCountBefore,
-                conflicts = conflictsCombined,
                 gameOver = false,
                 win = false,
-                cells = buildCells(board, overlay, cs),
-                overlay = overlay
+                cells = buildCells(
+                    b = board,
+                    overlay = overlay,
+                    conflictBoard = conflictDelta.upserts
+                ),
+                ruleList = overlay.ruleList,
+                conflictBoard = conflictDelta.upserts,
+                conflictProbs = overlay.conflictProbs
             )
         }
     }
 
-    private fun buildCells(b: Board, overlay: AnalyzerOverlay? = null, csUndo: ChangeSet? = null): List<CellUI> {
+    private fun buildCells(
+        b: Board,
+        overlay: AnalyzerOverlay = AnalyzerOverlay(),
+        conflictBoard: ConflictList = ConflictList(),
+        clearConflicts: Set<Int> = emptySet()
+    ): List<CellUI> {
         val out = ArrayList<CellUI>(b.rows * b.cols)
         for (gid in 0 until (b.rows * b.cols)) {
             val bc = b.cells[gid]
@@ -242,12 +247,12 @@ class GameViewModel : ViewModel() {
                     isExploded = bc.isExploded,
                     adjacentMines = bc.adjacentMines,
 
-                    probability = overlay?.probabilities?.get(gid),
+                    probability = overlay.probabilities.get(gid),
 
-                    forcedOpen = gid in (overlay?.forcedOpens ?: emptySet()),
-                    forcedFlag = gid in (overlay?.forcedFlags ?: emptySet()),
+                    forcedOpen = gid in overlay.forcedOpens,
+                    forcedFlag = gid in overlay.forcedFlags,
 
-                    conflict = gid in (csUndo?.conflicts?.keys ?: emptySet()),
+                    conflict = (gid in overlay.conflictProbs.keys) or (gid in conflictBoard.keys),
                 )
             )
         }

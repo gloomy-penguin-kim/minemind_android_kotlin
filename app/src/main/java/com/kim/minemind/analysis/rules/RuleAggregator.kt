@@ -1,24 +1,37 @@
-package com.kim.minemind.shared
+package com.kim.minemind.analysis.rules
 
-import com.kim.minemind.shared.ReasonList
 import com.kim.minemind.core.Action
 import com.kim.minemind.core.board.Board
+import com.kim.minemind.shared.ConflictList
+import com.kim.minemind.shared.Move
 import java.util.BitSet
+import kotlin.collections.MutableMap
 
-class MoveList(
+import com.kim.minemind.shared.ReasonList
+
+class RuleAggregator(
     private val board: Board = Board(rows = 0, cols = 0, mines = 0, seed = 0),
     private val stopAfterOne: Boolean = false
 ) {
 
     // gid -> move
-    val moves: MutableMap<Int, Move> = LinkedHashMap()
+    private val moves: MutableMap<Int, Move> = LinkedHashMap()
 
-    // gid -> set of reasons that conflicted at this gid
-    val conflicts: MutableMap<Int, ReasonList> = LinkedHashMap()
+    private val conflicts: ConflictList = ConflictList()
 
     val forcedFlags: MutableSet<Int> = HashSet()
     val forcedOpens: MutableSet<Int> = HashSet()
     val ruleActionByGid: MutableMap<Int, Action> = LinkedHashMap()
+
+    val keys: Set<Int> = moves.keys
+
+    fun getConflicts(): ConflictList {
+        return conflicts
+    }
+
+    fun getMoves(): Map<Int, Move> {
+        return moves
+    }
 
     fun addMove(mask: BitSet, localToGlobal: IntArray, move: Move) {
         if (stopAfterOne && moves.isNotEmpty()) return
@@ -29,7 +42,7 @@ class MoveList(
         if (board.cells[gid].isFlagged or board.cells[gid].isRevealed) return
 
         if (gid in conflicts.keys) {
-            addConflict(gid, move.reasons)
+            conflicts.addConflict(gid, move.reasons)
             return
         }
 
@@ -60,10 +73,9 @@ class MoveList(
 
 
        // Conflict: record both reasons and remove the move from moves
-        val conflictReasonList  = conflicts.getOrPut(gid) { ReasonList() }
 
-        conflictReasonList.addReasons(existing.reasons)
-        conflictReasonList.addReasons(move.reasons)
+        conflicts.addConflict(gid, existing.reasons)
+        conflicts.addConflict(gid, move.reasons)
 
 
 //        existing.reasons.forEach { r ->
@@ -75,16 +87,15 @@ class MoveList(
 
         // add the entire scope to the conflictsGids array so they can be
         // highlighted in the front-end
-        addConflicts(mask, localToGlobal, conflictReasonList)
+        addConflicts(mask, localToGlobal, conflicts.getReasons(gid))
 
         moves.remove(gid)
     }
 
-    fun addConflict(gid: Int, reasonList: ReasonList) {
+    fun addConflict(gid: Int, reasons: List<String>) {
         if (board.cells[gid].isFlagged or board.cells[gid].isRevealed) return
 
-        val conflict = conflicts.getOrPut(gid) { ReasonList() }
-        conflict.addReasons(reasonList)
+        conflicts.addConflict(gid, reasons)
 
         if (ruleActionByGid.contains(gid)) {
             ruleActionByGid.remove(gid)
@@ -100,24 +111,17 @@ class MoveList(
         }
     }
 
-    fun addConflicts(mask: BitSet, localToGlobal: IntArray, reasonList: ReasonList) {
+    fun addConflicts(mask: BitSet, localToGlobal: IntArray, reason: List<String>) {
         var bit = mask.nextSetBit(0)
         while (bit >= 0) {
             val gid = localToGlobal[bit]
-            addConflict(gid, reasonList)
+            addConflict(gid, reason)
             bit = mask.nextSetBit(bit + 1)
         }
     }
 
-    fun isEmpty(): Boolean {
-        return moves.isEmpty()
-    }
-
     fun isNotEmpty(): Boolean {
-        return moves.isNotEmpty()
+        return moves.isNotEmpty() and conflicts.isNotEmpty()
     }
 
-    fun barf() {
-
-    }
 }

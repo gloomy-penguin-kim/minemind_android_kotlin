@@ -45,6 +45,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import com.kim.minemind.core.TapMode
 import com.kim.minemind.core.probabilityToGlyph
+import com.kim.minemind.shared.ConflictList
+import com.kim.minemind.analysis.rules.RuleAggregator
 import com.kim.minemind.ui.state.GameUiState
 
 private const val TAG = "ui.GameViewModel"
@@ -195,8 +197,8 @@ fun CellInfoDialog(
 ) {
     val cols = ui.cols
     val isEnumerate = ui.isEnumerate
-    val rules = ui.overlay?.rules
-    val conflicts = ui.overlay?.conflicts
+    val rules = ui.ruleList
+    val conflicts = ui.conflictBoard.merge(ui.conflictProbs)
 
     val (r, c) = remember(cell.gid, cols) { divmod(cell.gid, cols) } // helper below
 
@@ -251,24 +253,23 @@ fun CellInfoDialog(
                 statusLines.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
 
                 if (isEnumerate) {
-
-                    if (rules?.contains(cell.gid) == true ) {
-                        Divider()
-                        Text("Matching Rules:", fontWeight = FontWeight.SemiBold)
-                        rules.get(cell.gid)?.reasons?.forEach {
+                    if (cell.gid in conflicts.keys) {
+                        HorizontalDivider()
+                        Text("Conflicts:", fontWeight = FontWeight.SemiBold)
+                        conflicts.getReasons(cell.gid).forEach {
                             Text("\t- $it", style = MaterialTheme.typography.bodySmall)
                         }
                     }
-                    if (conflicts?.contains(cell.gid) == true) {
-                        Divider()
-                        Text("Conflicts:", fontWeight = FontWeight.SemiBold)
-                        conflicts.get(cell.gid)?.forEach {
+                    else if (cell.gid in rules.keys) {
+                        HorizontalDivider()
+                        Text("Matching Rules:", fontWeight = FontWeight.SemiBold)
+                        rules.get(cell.gid)?.reasons?.getReasons()?.forEach {
                             Text("\t- $it", style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
 
-                Divider()
+                HorizontalDivider()
                 Text("Legend", fontWeight = FontWeight.SemiBold)
 
                 Text(
@@ -280,7 +281,7 @@ fun CellInfoDialog(
                     style = MaterialTheme.typography.bodySmall
                 )
 
-                Divider()
+                HorizontalDivider()
 
                 Text("Rule notes", fontWeight = FontWeight.SemiBold)
                 Text(
@@ -707,11 +708,11 @@ fun BoardFrame(
                             textColor = Color(0xFF9B859D) // purple
                             textColor = Color(0xFF61AEEF) // blue
                         }
-                        if (isEnumerate && cell.conflict) {
-                            textColor = Color(0xFFc792ea)
-                        }
                         if (cell.forcedFlag or cell.forcedOpen) {
                             textColor = Color(0xFFD3DAE3)
+                        }
+                        if (isEnumerate && cell.conflict) {
+                            textColor = Color(0xFFc792ea)
                         }
                         if (cell.isExploded) {
                             textColor = Color(0xFFFFFFFF)

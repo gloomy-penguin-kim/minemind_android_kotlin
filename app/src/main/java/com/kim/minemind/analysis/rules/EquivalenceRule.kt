@@ -2,14 +2,15 @@ package com.kim.minemind.analysis.rules
 
 import com.kim.minemind.analysis.frontier.Component
 import com.kim.minemind.shared.Move
-import com.kim.minemind.shared.MoveList
+import com.kim.minemind.analysis.rules.RuleAggregator
 import com.kim.minemind.core.Action
 import com.kim.minemind.core.MoveKind
+import com.kim.minemind.shared.ReasonList
 import java.util.BitSet
 
 fun equivalenceRule(
     comp: Component,
-    moves: MoveList,
+    moves: RuleAggregator,
     stopAfterOne: Boolean
 ) {
     fun isProperSubset(a: BitSet, b: BitSet): Boolean {
@@ -20,14 +21,14 @@ fun equivalenceRule(
     fun difference(b: BitSet, a: BitSet): BitSet =
         (b.clone() as BitSet).apply { andNot(a) }
 
-    fun enqueueMovesForMask(mask: BitSet, action: Action, reasons: List<String>) {
+    fun enqueueMovesForMask(mask: BitSet, action: Action, reasonList: ReasonList) {
         var bit = mask.nextSetBit(0)
         while (bit >= 0) {
             val gid = comp.localToGlobal[bit]
             moves.addMove(
                 (mask.clone() as BitSet),
                 comp.localToGlobal,
-                Move(gid, action, MoveKind.RULE, reasons)
+                Move(gid, action, MoveKind.RULE, reasonList)
             )
             if (stopAfterOne && moves.isNotEmpty()) return
             bit = mask.nextSetBit(bit + 1)
@@ -52,11 +53,10 @@ fun equivalenceRule(
                 moves.addConflicts(
                     mask = (a.clone() as BitSet),
                     localToGlobal = comp.localToGlobal,
-                    reasons = listOf(
-                        "SCOPE_EQUALITY_CONTRADICTION: A==B but remaining differs",
+                    listOf("EQUALITY_CONTRADICTION: A==B but remaining differs",
 //                        "A=$a rem=$remA",
 //                        "B=$b rem=$remB"
-                    )
+                        )
                 )
                 if (stopAfterOne) return
                 continue
@@ -69,11 +69,11 @@ fun equivalenceRule(
                     enqueueMovesForMask(
                         (diff.clone() as BitSet),
                         Action.OPEN,
-                        listOf(
+                        ReasonList(initReasons = listOf(
                             "Equivalence: A⊂B and rem(A)==rem(B) -> B\\A SAFE",
 //                            "A=$a rem=$remA subset of",
 //                            "B=$b rem=$remB"
-                        )
+                        ))
                     )
                 }
             }
@@ -85,10 +85,11 @@ fun equivalenceRule(
                     enqueueMovesForMask(
                         (diff.clone() as BitSet),
                         Action.OPEN,
-                        listOf(
+                        ReasonList(initReasons=listOf(
                             "Equivalence: B⊂A and rem(A)==rem(B) -> A\\B SAFE",
 //                            "B=$b rem=$remB subset of",
 //                            "A=$a rem=$remA"
+                        )
                         )
                     )
                 }

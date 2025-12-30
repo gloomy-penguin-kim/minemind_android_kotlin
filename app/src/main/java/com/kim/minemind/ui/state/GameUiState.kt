@@ -1,9 +1,9 @@
 package com.kim.minemind.ui.state
 
-import com.kim.minemind.analysis.analyzer.AnalyzerOverlay
-import com.kim.minemind.core.Action
+import com.kim.minemind.analysis.AnalyzerOverlay
 import com.kim.minemind.core.TapMode
-import com.kim.minemind.core.board.Cell
+import com.kim.minemind.shared.ConflictList
+import com.kim.minemind.shared.Move
 
 
 data class GameUiState(
@@ -15,10 +15,9 @@ data class GameUiState(
     val win: Boolean = false,
     val tapMode: TapMode = TapMode.OPEN,
     val cells: List<CellUI> = emptyList(),
-    val overlay: AnalyzerOverlay? = null,
-
-    val conflicts: Map<Int, MutableSet<String>> = LinkedHashMap(),
-
+    val conflictBoard: ConflictList = ConflictList(),
+    val conflictProbs: ConflictList = ConflictList(),
+    val ruleList: Map<Int, Move> = emptyMap(),
     val isVerify: Boolean = false,
     val isEnumerate: Boolean = false,
 )
@@ -32,11 +31,14 @@ data class CellUI(
     val adjacentMines: Int,
 
     val probability: Float?,      // from overlay
+
     var forcedOpen: Boolean = false,     // from overlay
     var forcedFlag: Boolean = false,
-    val conflict: Boolean = false,        // from overlay
+
+    val conflict: Boolean = false
 //    val ruleAction: Action?       // from overlay
 )
+
 
 
 
