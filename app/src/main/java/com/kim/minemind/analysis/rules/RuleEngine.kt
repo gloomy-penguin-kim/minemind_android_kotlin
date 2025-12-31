@@ -21,7 +21,6 @@ class RuleEngine () {
             if (stopAfterOne && moves.isNotEmpty()) break
         }
 
-
         return RuleResult(
             forcedFlags=moves.forcedFlags,
             forcedOpens=moves.forcedOpens,

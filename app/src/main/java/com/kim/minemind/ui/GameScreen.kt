@@ -45,9 +45,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import com.kim.minemind.core.TapMode
 import com.kim.minemind.core.probabilityToGlyph
-import com.kim.minemind.shared.ConflictList
-import com.kim.minemind.analysis.rules.RuleAggregator
 import com.kim.minemind.ui.state.GameUiState
+
+
+/*
+what do these two mean?  show entropy instead of raw probability
+
+show component-level probability vs global mine-adjusted
+*/
+
 
 private const val TAG = "ui.GameViewModel"
 
@@ -121,6 +127,9 @@ fun GameScreen(vm: GameViewModel) {
                 onMenu = { vm.handleTopMenu(it) }
             )
         },
+        // TODO: add menu item for Hint (click anywhere and it will reveal/flag it for you)
+        // TODO: add menu item for Stats (mine counts, board status, number of solutions if enum is on, etc)
+        // TODO: add menu item for highlight all the chords
         floatingActionButton = {
             OptionsFabMenu(
                 ui = ui,
@@ -129,6 +138,7 @@ fun GameScreen(vm: GameViewModel) {
 
                 onVerify = vm::verify,
                 onEnumerate = vm::enumerate,
+                onHint = vm::hint,
                 onAuto = vm::auto,
                 onStep = vm::step,
                 onUndo = vm::undo,
@@ -214,8 +224,102 @@ fun CellInfoDialog(
             when {
                 cell.isRevealed && cell.isMine -> "Revealed: MINE"
                 cell.isRevealed -> "Revealed: ${cell.adjacentMines} adjacent mines"
-                ui.isVerify && cell.isFlagged && cell.isMine-> "Flagged: verified correct"
-                ui.isVerify && cell.isFlagged && !cell.isMine-> "Flagged: verified INCORRECT/conflict"
+                ui.isVerify && cell.isFlagged && cell.isMine -> "Flagged: correct"
+                ui.isVerify && cell.isFlagged && !cell.isMine -> "Flagged: INCORRECT"
+                cell.isFlagged -> "Flagged"
+                cell.isExploded -> "Exploded Mine"
+                else -> "Hidden"
+            }
+        )
+
+        if (isEnumerate) {
+            add("Probability: $probText")
+
+            val bucket = probabilityBucketFor(cell.probability)
+            if (bucket != null) {
+                add(
+                    "Bucket: '${bucket.glyph}' " +
+                            "(${(bucket.min * 100).toInt()}–${(bucket.max * 100).toInt()}%)"
+                )
+            }
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Close") }
+        },
+        title = { Text("Cell Info") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                statusLines.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+
+                if (!ui.isEnumerate) {
+                    HorizontalDivider()
+                    Text("Turn on Enumerate for more info about rules, probabilities, and conflicts.")
+                }
+                else if (cell.forcedOpen) {
+                    HorizontalDivider()
+                    Text("Rule Open (O): safe in all solutions")
+                }
+                else if (cell.forcedFlag) {
+                    HorizontalDivider()
+                    Text("Rule Flag (X): mine in all solutions")
+                }
+                if (isEnumerate) {
+                    if (cell.gid in conflicts.keys) {
+                        HorizontalDivider()
+                        Text("Conflicts:", fontWeight = FontWeight.SemiBold)
+                        conflicts.getReasons(cell.gid).forEach {
+                            Text("\t- $it", style = MaterialTheme.typography.bodySmall)
+                        }
+                    } else if (cell.gid in rules.keys) {
+                        HorizontalDivider()
+                        Text("Matching Rules:", fontWeight = FontWeight.SemiBold)
+                        rules.get(cell.gid)?.reasons?.getReasons()?.forEach {
+                            Text("\t- $it", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+
+                if (!ui.overlay.isConsistent) {
+                    HorizontalDivider()
+                    Text(text = "⚠ Board state is inconsistent (0 valid solutions)",
+                        style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+    )
+}
+
+@Composable
+fun HelpInfoDialog(
+    cell: CellUI,
+    ui: GameUiState,
+    onDismiss: () -> Unit
+) {
+    val cols = ui.cols
+    val isEnumerate = ui.isEnumerate
+    val rules = ui.ruleList
+    val conflicts = ui.conflictBoard.merge(ui.conflictProbs)
+
+    val (r, c) = remember(cell.gid, cols) { divmod(cell.gid, cols) } // helper below
+
+    val probText = when (val p = cell.probability) {
+        null -> "—"
+        else -> "${(p * 100f).coerceIn(0f, 100f).toInt()}%"
+    }
+
+    val statusLines = buildList {
+        add("Location: r=$r, c=$c (gid=${cell.gid})")
+
+        add(
+            when {
+                cell.isRevealed && cell.isMine -> "Revealed: MINE"
+                cell.isRevealed -> "Revealed: ${cell.adjacentMines} adjacent mines"
+                ui.isVerify && cell.isFlagged && cell.isMine -> "Flagged: verified correct"
+                ui.isVerify && cell.isFlagged && !cell.isMine -> "Flagged: verified INCORRECT/conflict"
                 cell.isFlagged -> "Flagged"
                 cell.isExploded -> "Exploded Mine"
                 else -> "Hidden"
@@ -259,14 +363,18 @@ fun CellInfoDialog(
                         conflicts.getReasons(cell.gid).forEach {
                             Text("\t- $it", style = MaterialTheme.typography.bodySmall)
                         }
-                    }
-                    else if (cell.gid in rules.keys) {
+                    } else if (cell.gid in rules.keys) {
                         HorizontalDivider()
                         Text("Matching Rules:", fontWeight = FontWeight.SemiBold)
                         rules.get(cell.gid)?.reasons?.getReasons()?.forEach {
                             Text("\t- $it", style = MaterialTheme.typography.bodySmall)
                         }
                     }
+                }
+
+                if (!ui.overlay.isConsistent) {
+                    HorizontalDivider()
+                    Text("⚠ Board state is inconsistent (0 valid solutions)")
                 }
 
                 HorizontalDivider()
@@ -294,12 +402,6 @@ fun CellInfoDialog(
         }
     )
 }
-
-/*
-what do these two mean?  show entropy instead of raw probability
-
-show component-level probability vs global mine-adjusted
-*/
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -340,11 +442,12 @@ fun CellInfoBottomSheet(
             if (isEnumerate) {
                 Text("Probability: ${probPct?.toInt()?.toString() ?: "—"}%")
                 if (cell.conflict) Text("⚠ Conflict: constraints disagree here")
-                if (cell.forcedOpen) Text("Forced Open (O)")
-                if (cell.forcedFlag) Text("Forced Flag (X)")
+                if (cell.forcedOpen) Text("Rule based Open (O)")
+                if (cell.forcedFlag) Text("Rule based Flag (X)")
             } else {
                 Text("Turn on Enumerate to see probability/conflict info.")
             }
+
 
             Divider()
 
@@ -369,10 +472,6 @@ fun CellInfoBottomSheet(
 private fun divmod(gid: Int, cols: Int): Pair<Int, Int> =
     Pair(gid / cols, gid % cols)
 
-
-fun handleInfo(gid: Int) {
-   // need a dialog here
-}
 @Composable
 fun TapModeRow(
     tapMode: TapMode,
@@ -440,7 +539,6 @@ fun TapModeRow(
 }
 
 
-
 @Composable
 fun OptionsFabMenu(
     ui: GameUiState,
@@ -448,6 +546,7 @@ fun OptionsFabMenu(
     onExpandedChange: (Boolean) -> Unit,
 
     onUndo: () -> Unit,
+    onHint: () -> Unit,
     onStep: () -> Unit,
     onAuto: () -> Unit,
     onVerify: () -> Unit,
@@ -461,15 +560,23 @@ fun OptionsFabMenu(
 
         AnimatedVisibility(visible = expanded) {
             Column(horizontalAlignment = Alignment.End) {
-                SmallActionPill(label = if (ui.isVerify) "Verify ✓" else "Verify", selected = ui.isVerify) {
+                SmallActionPill(
+                    label = if (ui.isVerify) "Verify ✓" else "Verify",
+                    selected = ui.isVerify
+                ) {
                     onExpandedChange(false); onVerify()
                 }
                 Spacer(Modifier.height(10.dp))
-                SmallActionPill(label = if (ui.isEnumerate) "Enumerate ✓" else "Enumerate", selected = ui.isEnumerate) {
+                SmallActionPill(
+                    label = if (ui.isEnumerate) "Enumerate ✓" else "Enumerate",
+                    selected = ui.isEnumerate
+                ) {
                     onExpandedChange(false); onEnumerate()
                 }
                 Spacer(Modifier.height(10.dp))
-                SmallActionPill(label = "Auto") { onExpandedChange(false); onAuto() }
+                SmallActionPill(label = "Hint") { onExpandedChange(false); onHint() }
+                Spacer(Modifier.height(10.dp))
+                SmallActionPill(label = "Auto") { onExpandedChange(false); onAuto(); }
                 Spacer(Modifier.height(10.dp))
                 SmallActionPill(label = "Step") { onExpandedChange(false); onStep() }
                 Spacer(Modifier.height(10.dp))
@@ -487,19 +594,14 @@ fun OptionsFabMenu(
 }
 
 
+
+
 @Composable
 private fun SmallActionPill(
     label: String,
     selected: Boolean = false,
     onClick: () -> Unit
 ) {
-    val segmentColors = SegmentedButtonDefaults.colors(
-        activeContainerColor = Color(0xFF444a73),
-        activeContentColor = Color(0xFFD3DAE3),
-        inactiveContainerColor = Color(0xFF21252B),
-        inactiveContentColor = Color(0xFFD3DAE3),
-    )
-
     val bg = if (selected) Color(0xFF444A73) else Color(0xFF21252B)
     val fg = if (selected) Color(0xFFD3DAE3) else Color(0xFFD3DAE3)
 
@@ -527,7 +629,6 @@ private fun SmallActionPill(
         }
     }
 }
-
 
 
 @Composable
@@ -644,84 +745,115 @@ fun BoardFrame(
 
                 items(cells, key = { it.gid }) { cell ->
 
-                    val bg = when {
-                        cell.isRevealed and !cell.isMine ->
-                            Color(0xFF4D515D)
-                        cell.isRevealed and cell.isMine ->
-                            // Color(0xFF9B859D) purple
-                            Color(0xFF61AEEF)
-                        isVerify && !cell.isMine && cell.isFlagged ->
-                            // Color(0xFF9B859D) purple
-                            Color(0xFFc792ea)
-                        cell.isExploded ->
-                            // Color(0xFF9B859D) purple
-                            Color(0xFFc792ea)
-                        cell.isFlagged ->
-                            // Color(0xFF9B859D) purple
-                            Color(0xFF61AEEF)
-                        else ->
-                            Color(0xFF282C34)
-                    }
+                    var bg = Color(0xFF282C34)
+                    var txt = ""
+                    var fg = Color(0xFFFFFFFF)
 
+                    val flagBlueColor = Color(0xFF61AEEF)
+                    val revealedFont = Color(0xFFFFFFFF)
+                    val revealedBackground = Color(0xFF4D515D)
+                    val notRevealedBackground = Color(0xFF282C34)
+                    val explodedBackground = Color(0xFFf78c6c) // 0xFF9B859D 0xFF80cbc4
+                    val incorrectPinkColor = Color(0xFFc792ea)
+                    val probAndRuleColor = Color(0xff7286BF)
+
+                    if (cell.isRevealed) {
+                        if (cell.adjacentMines == 0) {
+                            bg = revealedBackground
+                            fg = revealedBackground
+                            txt = ""
+                        } else if (cell.adjacentMines >= 1) {
+                            bg = revealedBackground
+                            fg = if (cell.conflict) incorrectPinkColor else revealedFont
+                            txt = cell.adjacentMines.toString()
+                        } else if (cell.isMine) {
+                            if (cell.isExploded) {
+                                bg = explodedBackground
+                                fg = revealedFont
+                                txt = "@"
+                            }
+                            else {
+                                bg = if (cell.isFlagged) flagBlueColor else incorrectPinkColor
+                                fg = revealedFont
+                                txt = if (cell.isFlagged) "F" else "X"
+                            }
+                        }
+                    } else { // not revealed
+                        if (cell.isFlagged) {
+                            if ((ui.isVerify or ui.gameOver) and !cell.isMine) {
+                                bg = incorrectPinkColor
+                                fg = revealedFont
+                                txt = "F"
+                            } else {
+                                bg = flagBlueColor
+                                fg = revealedFont
+                                txt = "F"
+                            }
+                        } else if (cell.isExploded) {
+                            bg = incorrectPinkColor
+                            fg = revealedFont
+                            txt = "@"
+                        } else if (isEnumerate) {
+                            if (cell.conflict) {
+                                bg = notRevealedBackground
+                                fg = incorrectPinkColor
+                                txt = "C"
+                            } else if (cell.forcedFlag) {
+                                bg = notRevealedBackground
+                                fg = probAndRuleColor
+                                txt = "X"
+                            } else if (cell.forcedOpen) {
+                                bg = notRevealedBackground
+                                fg = probAndRuleColor
+                                txt = "O"
+                            } else if (ui.overlay.isConsistent && cell.probability != null) {
+                                bg = notRevealedBackground
+                                fg = probAndRuleColor
+                                txt = probabilityToGlyph(cell.probability)
+                            } else {
+                                bg = notRevealedBackground
+                                fg = revealedFont
+                                txt = ""
+                            }
+                        }
+                    }
                     Box(
                         modifier = Modifier
                             .size(cellSize)
-                            .padding(0.dp)
-                            .border(1.dp, Color(0xFF282C34))
-                            .background(bg)
+                            .padding(2.dp)
+                            .border(
+                                width = 1.dp,
+                                color = notRevealedBackground)
+                            .background(notRevealedBackground)
                             .combinedClickable(
                                 onClick = { onCell(cell.gid) },
                                 onLongClick = { onCellLongPress(cell.gid) }
                             ),
                         contentAlignment = Alignment.Center
                     ) {
-                        var txt = ""
-
-                        if (cell.isRevealed) {
-                            if (cell.adjacentMines == 0) {
-                                txt = ""
-                            }
-                            else if (cell.adjacentMines >= 1) {
-                                txt = cell.adjacentMines.toString()
-                            }
+                        Box(
+                            modifier = Modifier
+                                .size(cellSize)
+                                .padding(0.dp)
+                                .border(
+                                    width= 1.dp,
+                                    color = notRevealedBackground,
+                                    shape = RoundedCornerShape(5))
+                                .background(
+                                    color = bg,
+                                    shape = RoundedCornerShape(5))
+                                .combinedClickable(
+                                    onClick = { onCell(cell.gid) },
+                                    onLongClick = { onCellLongPress(cell.gid) }
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(txt, color = fg)
                         }
-                        else {
-                            if (cell.isFlagged) {
-                                txt = "F"
-                            }
-                            else if (cell.isExploded) {
-                                txt = "@"
-                            }
-                            else if (isEnumerate) {
-                                txt = when {
-                                    cell.conflict -> "C"
-                                    cell.forcedFlag -> "X"
-                                    cell.forcedOpen -> "O"
-                                    (cell.probability ?: -1.0f) >= 0.0f -> probabilityToGlyph(cell.probability)
-                                    else -> ""
-                                }
-                            }
-                        }
-
-                        var textColor = Color(0xFFFFFFFF)
-                        if (isEnumerate && cell.probability != null) {
-                            textColor = Color(0xFF9B859D) // purple
-                            textColor = Color(0xFF61AEEF) // blue
-                        }
-                        if (cell.forcedFlag or cell.forcedOpen) {
-                            textColor = Color(0xFFD3DAE3)
-                        }
-                        if (isEnumerate && cell.conflict) {
-                            textColor = Color(0xFFc792ea)
-                        }
-                        if (cell.isExploded) {
-                            textColor = Color(0xFFFFFFFF)
-                        }
-                        Text(txt, color = textColor)
+                        Text(txt, color = fg)
                     }
                 }
             }
         }
     }
 }
-

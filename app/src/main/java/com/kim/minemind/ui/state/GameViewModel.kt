@@ -16,7 +16,6 @@ import com.kim.minemind.core.history.HistoryEntry
 import com.kim.minemind.core.history.HistoryStack
 
 import android.util.Log
-import com.kim.minemind.core.board.AppliedMove
 import com.kim.minemind.shared.ConflictDelta
 import com.kim.minemind.shared.ConflictList
 
@@ -64,7 +63,8 @@ class GameViewModel : ViewModel() {
         _uiState.update { it.copy(tapMode = m) }
     }
 
-    fun dispatch(action: Action, gid: Int) {
+    fun dispatch(action: Action?, gid: Int) {
+        if (action == null) return
         val beforeMoves = _uiState.value.moves
 
         val cs = board.apply(action, gid) // <-- TRUTH ONLY
@@ -75,8 +75,11 @@ class GameViewModel : ViewModel() {
                 cs,
                 beforeMoves))
 
-        val overlay = if (_uiState.value.isEnumerate) analyzer.analyze(board) else AnalyzerOverlay()
-        val conflictDelta: ConflictDelta = if (_uiState.value.isEnumerate) board.conflictsByGid(cs.getAllGid()) else ConflictDelta()
+        // TODO:  if the board says gameOver or something should probs still be ran?
+        // TODO:  maybe separate out probs and rules so maybe they can be ran concurrently..?
+
+        val overlay = if (!board.gameOver and _uiState.value.isEnumerate) analyzer.analyze(board) else AnalyzerOverlay()
+        val conflictDelta: ConflictDelta = if (!board.gameOver and _uiState.value.isEnumerate) board.conflictsByGid(cs.getAllGid()) else ConflictDelta()
         val conflictBoard = _uiState.value.conflictBoard.applyDelta(conflictDelta)
 
         Log.d(TAG, "overlay = $overlay")
@@ -96,6 +99,7 @@ class GameViewModel : ViewModel() {
                     conflictsBoard = conflictBoard,
                     clearConflicts = conflictDelta.removes
                 ),
+                overlay = overlay,
                 ruleList = overlay.ruleList,
                 conflictBoard = conflictBoard,
                 conflictProbs = overlay.conflictProbs
@@ -153,11 +157,173 @@ class GameViewModel : ViewModel() {
         return updated
     }
 
-    fun step() {
+    fun step(): Int {
+        // take a rule if you can
+        // if not, probs and take the lowest prob and open/flag that based on what it actually is
+        if (board.gameOver) return -1
 
+        Log.d(TAG, "autobot")
+
+        var overlay = _uiState.value.overlay
+        var modifiedGid = -1
+
+        overlay = analyzer.runRulesOnly(board, stopAfterOne = false)
+        Log.d(TAG, "overlay is $overlay")
+
+        var oneMoveTaken = false
+        for (ruleAction in overlay.ruleActions) {
+            if (ruleAction.value == Action.OPEN) {
+                dispatch(ruleAction.value, ruleAction.key)
+                modifiedGid = ruleAction.key
+                oneMoveTaken = true
+                break
+            }
+        }
+        if (!oneMoveTaken) {
+            overlay = analyzer.analyze(board)
+            if (overlay.probabilities.isNotEmpty()) {
+                // ok go through prob to get the closest to either open or close
+                var minDiff = 1.0f
+                var minGid = -1
+                for ((gid, prob) in overlay.probabilities) {
+                    if (prob != null) {
+                        if (prob < 0.5f) {
+                            val diff = prob
+                            if (diff < minDiff) {
+                                minDiff = diff
+                                minGid = gid
+                            }
+                            if (diff == 0.0f) {
+                                break
+                            }
+                        }
+                    }
+                }
+
+                if (minGid != -1) {
+                    val action = if (board.isMine(minGid)) Action.FLAG else Action.OPEN
+                    dispatch(action, minGid)
+                    modifiedGid = minGid
+                    oneMoveTaken = true
+                }
+            }
+            else { // no probabilities listed
+                for (cell in _uiState.value.cells) {
+                    if (!cell.isRevealed and !cell.isFlagged and !cell.isMine) {
+                        dispatch(Action.OPEN, cell.gid)
+                        modifiedGid = cell.gid
+                        oneMoveTaken = true
+                        break
+                    }
+                }
+            }
+        }
+        if (!oneMoveTaken) {
+
+        }
+        return modifiedGid
     }
-    fun auto() {
 
+    // autoBuildCells(totalMoves, board, overlay, csOpen, _uiState.value.conflictDelta, _uiState.value.conflictBoard)
+    private fun autoBuildCells(
+        totalMoves: Int,
+        board: Board,
+        overlay: AnalyzerOverlay,
+        cs: ChangeSet,
+        conflictDelta: ConflictDelta,
+        conflictBoard: ConflictList
+    ) {
+        _uiState.update { s ->
+            s.copy(
+                moves = totalMoves,
+                gameOver = cs.gameOver,
+                win = cs.win,
+                cells = patchCells(
+                    base = s.cells,
+                    cs = cs,
+                    board = board,
+                    overlay = overlay,
+                    conflictsBoard = conflictBoard,
+                    clearConflicts = conflictDelta.removes
+                ),
+                overlay = overlay,
+                ruleList = overlay.ruleList,
+                conflictBoard = conflictBoard,
+                conflictProbs = overlay.conflictProbs
+            )
+        }
+    }
+
+    fun auto() {
+        if (board.gameOver) return
+
+        Log.d(TAG, "autobot")
+
+        var overlay = _uiState.value.overlay
+        val beforeMoves = _uiState.value.moves
+
+        var prevTotalMoves = 0
+        var totalMoves = 0
+        var totalChanges = ChangeSet()
+        do {
+            overlay = analyzer.runRulesOnly(board, stopAfterOne = false)
+            Log.d(TAG, "overlay is $overlay")
+            prevTotalMoves = totalMoves
+            for (ruleAction in overlay.ruleActions) {
+                if ((ruleAction.value == Action.OPEN) and board.isMine(ruleAction.key)) continue
+                if ((ruleAction.value == Action.FLAG) and !board.isMine(ruleAction.key)) continue
+                val cs = board.apply(ruleAction.value, ruleAction.key)
+                autoBuildCells(totalMoves, board, overlay, cs, ConflictDelta(), _uiState.value.conflictBoard)
+                totalChanges = totalChanges.merged(cs)
+                totalMoves += 1
+                Log.d(TAG, "ruleAction = ${ruleAction.value} ${ruleAction.key}")
+                Log.d(TAG, "cs is $cs")
+            }
+        } while ((totalMoves != prevTotalMoves) and !totalChanges.gameOver)
+
+        if (totalChanges.empty) return
+
+        history.push(
+            HistoryEntry(Move(-1, Action.INVALID, MoveKind.AUTO),
+                totalChanges,
+                beforeMoves))
+
+        if (!totalChanges.gameOver and _uiState.value.isEnumerate) {
+            overlay = analyzer.analyze(board)
+
+            val conflictDelta =  board.conflictsByGid(totalChanges.getAllGid())
+            val conflictBoard = _uiState.value.conflictBoard.applyDelta(conflictDelta)
+
+            _uiState.update { s ->
+                s.copy(
+                    moves = beforeMoves + totalMoves,
+                    gameOver = totalChanges.gameOver,
+                    win = totalChanges.win,
+                    cells = patchCells(
+                        base = s.cells,
+                        cs = totalChanges,
+                        board = board,
+                        overlay = overlay,
+                        conflictsBoard = conflictBoard,
+                        clearConflicts = conflictDelta.removes
+                    ),
+                    overlay = overlay,
+                    ruleList = overlay.ruleList,
+                    conflictBoard = conflictBoard,
+                    conflictProbs = overlay.conflictProbs
+                )
+            }
+        }
+    }
+
+    fun hint(gid: Int) {
+        if (board.isRevealedGid(gid)) return
+        if (board.isMine(gid)) {
+            dispatch(Action.FLAG, gid)
+        }
+        else {
+            dispatch(Action.OPEN, gid)
+        }
     }
     fun verify() {
         val v = _uiState.value.isVerify
@@ -185,6 +351,8 @@ class GameViewModel : ViewModel() {
                         overlay = overlay
                     ),
                     isEnumerate = true,
+
+                    overlay = overlay,
                     ruleList = overlay.ruleList,
                     conflictBoard = conflictBoard.upserts,
                     conflictProbs = overlay.conflictProbs
@@ -221,6 +389,7 @@ class GameViewModel : ViewModel() {
                     overlay = overlay,
                     conflictBoard = conflictDelta.upserts
                 ),
+                overlay = overlay,
                 ruleList = overlay.ruleList,
                 conflictBoard = conflictDelta.upserts,
                 conflictProbs = overlay.conflictProbs

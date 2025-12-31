@@ -4,8 +4,8 @@ object  AnalysisConfig {
     val cacheCapacity: Int = 128
     val enableProbabilities: Boolean = true
     val runProbabilitiesEvenWhenForced: Boolean = true
-    val maxKPerComponent: Int = 100
-    val maxTotalK: Int = 400
+    val maxKPerComponent: Int = 200
+    val maxTotalK: Int = 500
     val maxComponents: Int = 50
     val enableConflicts: Boolean = true
     val enableRuleTags: Boolean = true

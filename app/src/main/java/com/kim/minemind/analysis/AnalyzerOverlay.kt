@@ -15,5 +15,7 @@ data class AnalyzerOverlay(
 
     var conflictProbs: ConflictList = ConflictList(),
 
-    val ruleList: Map<Int, Move> = LinkedHashMap()
+    val ruleList: Map<Int, Move> = LinkedHashMap(),
+
+    val isConsistent: Boolean = true
 )

@@ -22,8 +22,10 @@ class Frontier (
             val unknownNeighbors = ArrayList<Int>()
 
             for (gid in board.neighbors(cell.gid)) {
-                if (board.cells[gid].isFlagged) flagged++
-                else if (!board.cells[gid].isRevealed) unknownNeighbors.add(gid)
+                val cell = board.cells[gid]
+
+                if (cell.isFlagged or cell.isExploded or (cell.isRevealed and cell.isMine)) flagged++
+                else if (!cell.isRevealed) unknownNeighbors.add(gid)
             }
 
             if (unknownNeighbors.isEmpty()) continue

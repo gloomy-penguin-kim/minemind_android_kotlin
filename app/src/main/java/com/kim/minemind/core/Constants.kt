@@ -24,11 +24,11 @@ data class ProbabilityBucket(
 
 private val PROBABILITY_BUCKETS = listOf(
     ProbabilityBucket("",   -1f,   -0.0001f),
-    ProbabilityBucket("0",   0.0f,   0.05f),
-    ProbabilityBucket(".",   0.05f,  0.15f),
-    ProbabilityBucket(",",   0.15f,  0.25f),
-    ProbabilityBucket(":",   0.25f,  0.35f),
-    ProbabilityBucket("-",   0.35f,  0.45f),
+    ProbabilityBucket("O",   0.0f,   0.05f),
+    ProbabilityBucket("o",   0.05f,  0.15f),
+    ProbabilityBucket(".",   0.15f,  0.25f),
+    ProbabilityBucket(",",   0.25f,  0.35f),
+    ProbabilityBucket(":",   0.35f,  0.45f),
     ProbabilityBucket("~",   0.45f,  0.55f),
     ProbabilityBucket("=",   0.55f,  0.65f),
     ProbabilityBucket("+",   0.65f,  0.75f),

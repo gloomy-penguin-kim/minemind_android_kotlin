@@ -5,8 +5,6 @@ import com.kim.minemind.core.Action
 import com.kim.minemind.core.history.ChangeSet
 import com.kim.minemind.core.history.HistoryEntry
 import com.kim.minemind.shared.ConflictDelta
-import com.kim.minemind.shared.ConflictList
-import com.kim.minemind.shared.ReasonList
 
 class Board(
     val rows: Int,
@@ -44,8 +42,9 @@ class Board(
     fun cell(r: Int, c: Int) = cells[gid(r, c)]
     fun cell(gid: Int) = cells[gid]
 
-    fun apply(action: Action, gid: Int, flagValue: Boolean? = null): ChangeSet {
+    fun apply(action: Action?, gid: Int, flagValue: Boolean? = null): ChangeSet {
         if (gameOver) return ChangeSet()
+        if (action == null) return ChangeSet()
 
         if (action == Action.OPEN && !minesPlaced) {
             generateBoard(gid)
@@ -65,6 +64,9 @@ class Board(
         val csCombined = csDelta.merged(csWin)
         Log.d(TAG, "apply = $csCombined")
 
+        gameOver = csCombined.gameOver
+        win = csCombined.win
+
         return csCombined
     }
 
@@ -72,18 +74,23 @@ class Board(
         var flaggedNeighbors = 0
         var unknownNeighbors = 0
         for (nGid in neighbors(gid)) {
-            if (cells[nGid].isFlagged) {
+            val neighbor = cells[nGid]
+
+            if (neighbor.isFlagged or (neighbor.isRevealed and neighbor.isMine)) {
                 flaggedNeighbors += 1
             }
-            if (!cells[nGid].isFlagged && !cells[nGid].isRevealed && !cells[nGid].isExploded) {
+            if (!neighbor.isFlagged && !neighbor.isRevealed && !neighbor.isExploded) {
                 unknownNeighbors += 1
             }
-            Log.d(TAG, "cell = ${cells[nGid]}, unknown = $unknownNeighbors")
         }
         return intArrayOf(flaggedNeighbors, unknownNeighbors)
     }
 
     fun conflictsByGid(gids: Set<Int>): ConflictDelta {
+        if (gameOver) return ConflictDelta()
+        if (!minesPlaced) return ConflictDelta()
+        if (gids.isEmpty()) return ConflictDelta()
+
         val conflictDelta = ConflictDelta()
 
         Log.d(TAG, "conflictsByGid = $gids")
@@ -120,7 +127,7 @@ class Board(
         if (cells[gid].isRevealed || cells[gid].isFlagged) return ChangeSet()
 
         if (cells[gid].isMine) {
-            return loseCondition()
+            return loseCondition(gid)
         }
         val csFlood = floodReveal(gid)
         val cs = ChangeSet(revealed = setOf(gid))
@@ -166,18 +173,20 @@ class Board(
         return ChangeSet(revealed = revealedSet)
     }
 
-    private fun loseCondition(): ChangeSet {
-        val mines = mutableSetOf<Int>()
+    private fun loseCondition(gid:Int): ChangeSet {
+        val revealed = mutableSetOf<Int>()
 
         for (cell in cells) {
             if (cell.isMine) {
-                cell.isExploded = true
-                mines.add(cell.gid)
+                cell.isRevealed = true
+                revealed.add(cell.gid)
             }
         }
+        cells[gid].isExploded = true
 
         return ChangeSet(
-            exploded = mines,
+            revealed = revealed,
+            exploded = mutableSetOf(gid),
             gameOver = true,
             win = false
         )
@@ -220,7 +229,7 @@ class Board(
         val mineCount = cells[gid].adjacentMines
         var flagCount = 0
         for (nGid in neighbors(gid)) {
-            if (cells[nGid].isFlagged) {
+            if (cells[nGid].isFlagged or (cells[nGid].isRevealed and cells[nGid].isMine)) {
                 flagCount += 1
             }
         }
@@ -230,8 +239,6 @@ class Board(
         if (mineCount == flagCount) {
             for (nGid in neighbors(gid)) {
                 if (!cells[nGid].isRevealed and !cells[nGid].isFlagged) {
-//                    val appliedMove = apply(Action.OPEN, nGid)
-//                    cs = cs.merged(appliedMove.changeSet)
                     val csReveal = revealCell(nGid)
                     cs = cs.merged(csReveal)
                     revealed.add(nGid)

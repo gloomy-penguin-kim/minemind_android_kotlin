@@ -18,6 +18,7 @@ data class GameUiState(
     val conflictBoard: ConflictList = ConflictList(),
     val conflictProbs: ConflictList = ConflictList(),
     val ruleList: Map<Int, Move> = emptyMap(),
+    val overlay: AnalyzerOverlay = AnalyzerOverlay(),
     val isVerify: Boolean = false,
     val isEnumerate: Boolean = false,
 )
