@@ -6,5 +6,6 @@ data class HistoryEntry(
     val move: Move,
     val changes: ChangeSet,
     val moveCountBefore: Int,
+    val remainingSafeBefore: Int,
     val note: String = ""
 )

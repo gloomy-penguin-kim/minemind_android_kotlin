@@ -29,7 +29,7 @@ class Board(
         private set
 
     var remainingSafe: Int = rows * cols - mines
-        private set
+
 
 
     companion object {
@@ -46,6 +46,8 @@ class Board(
         if (gameOver) return ChangeSet()
         if (action == null) return ChangeSet()
 
+        val remainingSafeBefore = remainingSafe
+
         if (action == Action.OPEN && !minesPlaced) {
             generateBoard(gid)
         }
@@ -53,6 +55,7 @@ class Board(
         val c: Pair<Int, Int>  = rc(gid)
         Log.d(TAG, "row = ${c.first}, col = ${c.second}")
         Log.d(TAG, "cell = ${cells[gid]} at $gid")
+        Log.d(TAG, "remainingSafeBefore = $remainingSafeBefore")
 
         val csDelta = when (action) {
             Action.OPEN -> revealCell(gid)
@@ -60,9 +63,15 @@ class Board(
             Action.CHORD -> chord(gid)
             Action.INVALID -> ChangeSet()
         }
+        remainingSafe -= csDelta.revealed.size
+        Log.d(TAG, "remainingSafe = $remainingSafe")
+
+        Log.d(TAG, "csDelta = $csDelta")
         val csWin = checkWinCondition()
+        Log.d(TAG, "csWin = $csWin")
         val csCombined = csDelta.merged(csWin)
         Log.d(TAG, "apply = $csCombined")
+
 
         gameOver = csCombined.gameOver
         win = csCombined.win
@@ -157,7 +166,6 @@ class Board(
 
             cells[gid].isRevealed = true
             revealedSet.add(gid)
-            remainingSafe -= 1
 
             if (cell.adjacentMines == 0) {
                 for (nGid in neighbors(gid)) {
@@ -195,6 +203,8 @@ class Board(
     private fun checkWinCondition(): ChangeSet {
         val newlyFlagged = mutableSetOf<Int>()
 
+        Log.d(TAG, "remainingSafe = $remainingSafe")
+        Log.d(TAG, "gameOver = $gameOver")
         if ((remainingSafe <= 0) and !gameOver) {
             for (cell in cells) {
                 if (!cell.isRevealed && !cell.isFlagged) {
@@ -254,6 +264,7 @@ class Board(
         entry.changes.revealed.forEach { gid -> cells[gid].isRevealed = !cells[gid].isRevealed }
         entry.changes.flagged.forEach { gid -> cells[gid].isFlagged = !cells[gid].isFlagged }
         entry.changes.exploded.forEach { gid -> cells[gid].isExploded = !cells[gid].isExploded }
+        remainingSafe = entry.remainingSafeBefore
         gameOver = false
         win = false
     }

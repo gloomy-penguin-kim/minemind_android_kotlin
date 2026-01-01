@@ -127,7 +127,6 @@ fun GameScreen(vm: GameViewModel) {
                 onMenu = { vm.handleTopMenu(it) }
             )
         },
-        // TODO: add menu item for Hint (click anywhere and it will reveal/flag it for you)
         // TODO: add menu item for Stats (mine counts, board status, number of solutions if enum is on, etc)
         // TODO: add menu item for highlight all the chords
         floatingActionButton = {
@@ -138,15 +137,16 @@ fun GameScreen(vm: GameViewModel) {
 
                 onVerify = vm::verify,
                 onEnumerate = vm::enumerate,
-                onHint = vm::hint,
                 onAuto = vm::auto,
                 onStep = vm::step,
                 onUndo = vm::undo,
 
+                // TODO: make it so hint stays selected and maybe nothing in the bottom menu is selected
+                onHint = { vm.setTapMode(TapMode.HINT) },
                 onInfo = { vm.setTapMode(TapMode.INFO) },
                 onChord = { vm.setTapMode(TapMode.CHORD) },
                 onFlag = { vm.setTapMode(TapMode.FLAG) },
-                onOpen = { vm.setTapMode(TapMode.OPEN) },
+                onOpen = { vm.setTapMode(TapMode.HINT) },
             )
         }
     ) { pad ->
@@ -163,6 +163,7 @@ fun GameScreen(vm: GameViewModel) {
                         TapMode.FLAG -> vm.dispatch(Action.FLAG, gid)
                         TapMode.CHORD -> vm.dispatch(Action.CHORD, gid)
                         TapMode.INFO -> infoGid = gid
+                        TapMode.HINT -> vm.hint(gid)
                     }
                 },
                 onCellLongPress = { gid -> vm.dispatch(Action.FLAG, gid) }
@@ -546,7 +547,6 @@ fun OptionsFabMenu(
     onExpandedChange: (Boolean) -> Unit,
 
     onUndo: () -> Unit,
-    onHint: () -> Unit,
     onStep: () -> Unit,
     onAuto: () -> Unit,
     onVerify: () -> Unit,
@@ -555,6 +555,7 @@ fun OptionsFabMenu(
     onChord: () -> Unit,
     onFlag: () -> Unit,
     onOpen: () -> Unit,
+    onHint: () -> Unit
 ) {
     Column(horizontalAlignment = Alignment.End) {
 
@@ -574,9 +575,9 @@ fun OptionsFabMenu(
                     onExpandedChange(false); onEnumerate()
                 }
                 Spacer(Modifier.height(10.dp))
-                SmallActionPill(label = "Hint") { onExpandedChange(false); onHint() }
+                SmallActionPill(label = "Hint") { onExpandedChange(false); onHint(); }
                 Spacer(Modifier.height(10.dp))
-                SmallActionPill(label = "Auto") { onExpandedChange(false); onAuto(); }
+                SmallActionPill(label = "Autobot") { onExpandedChange(false); onAuto(); }
                 Spacer(Modifier.height(10.dp))
                 SmallActionPill(label = "Step") { onExpandedChange(false); onStep() }
                 Spacer(Modifier.height(10.dp))
@@ -749,6 +750,22 @@ fun BoardFrame(
                     var txt = ""
                     var fg = Color(0xFFFFFFFF)
 
+                    // •
+                    // https://materialui.co/colors
+                    // https://material-theme.com/docs/reference/color-palette/
+                    val dots = listOf(
+                        Color(0xFF21B615),
+                        Color(0xFFA335EC),
+                        Color(0xFF1C721A),
+                        Color(0xFFE53935),
+                        Color(0xFF4653C7),
+                        Color(0xFFFFEB3B),
+                        Color(0xFFE59630),
+                        Color(0xFFC485B9),
+                        Color(0xFF2196F3),
+                    )
+
+
                     val flagBlueColor = Color(0xFF61AEEF)
                     val revealedFont = Color(0xFFFFFFFF)
                     val revealedBackground = Color(0xFF4D515D)
@@ -817,6 +834,8 @@ fun BoardFrame(
                             }
                         }
                     }
+
+                    if
                     Box(
                         modifier = Modifier
                             .size(cellSize)
@@ -850,7 +869,6 @@ fun BoardFrame(
                         ) {
                             Text(txt, color = fg)
                         }
-                        Text(txt, color = fg)
                     }
                 }
             }

@@ -66,14 +66,19 @@ class GameViewModel : ViewModel() {
     fun dispatch(action: Action?, gid: Int) {
         if (action == null) return
         val beforeMoves = _uiState.value.moves
+        val beforeRemainingSafe = board.remainingSafe
 
         val cs = board.apply(action, gid) // <-- TRUTH ONLY
         Log.d(TAG, "cs = $cs")
         if (cs.empty) return
         history.push(
-            HistoryEntry(Move(gid, action, MoveKind.USER),
-                cs,
-                beforeMoves))
+            HistoryEntry(
+                move = Move(gid, action, MoveKind.USER),
+                changes = cs,
+                moveCountBefore = beforeMoves,
+                remainingSafeBefore = beforeRemainingSafe
+            )
+        )
 
         // TODO:  if the board says gameOver or something should probs still be ran?
         // TODO:  maybe separate out probs and rules so maybe they can be ran concurrently..?
@@ -172,7 +177,7 @@ class GameViewModel : ViewModel() {
 
         var oneMoveTaken = false
         for (ruleAction in overlay.ruleActions) {
-            if (ruleAction.value == Action.OPEN) {
+            if ((ruleAction.value == Action.OPEN) and !board.isMine(ruleAction.key)) {
                 dispatch(ruleAction.value, ruleAction.key)
                 modifiedGid = ruleAction.key
                 oneMoveTaken = true
@@ -187,7 +192,7 @@ class GameViewModel : ViewModel() {
                 var minGid = -1
                 for ((gid, prob) in overlay.probabilities) {
                     if (prob != null) {
-                        if (prob < 0.5f) {
+                        if (prob < 0.10f) {
                             val diff = prob
                             if (diff < minDiff) {
                                 minDiff = diff
@@ -219,12 +224,21 @@ class GameViewModel : ViewModel() {
             }
         }
         if (!oneMoveTaken) {
-
+            for (cell in _uiState.value.cells) {
+                if (cell.isFlagged and !cell.isMine) {
+                    dispatch(Action.FLAG, cell.gid)
+                    dispatch(Action.OPEN, cell.gid)
+                    modifiedGid = cell.gid
+                    break
+                }
+            }
         }
         return modifiedGid
     }
 
-    // autoBuildCells(totalMoves, board, overlay, csOpen, _uiState.value.conflictDelta, _uiState.value.conflictBoard)
+    // autoBuildCells(totalMove
+    // s, board, overlay, csOpen, _uiState.value.conflictDelta, _uiState.value.conflictBoard)
+    // TODO: make it so autobot doesn't make a wrong move ever
     private fun autoBuildCells(
         totalMoves: Int,
         board: Board,
@@ -254,6 +268,7 @@ class GameViewModel : ViewModel() {
         }
     }
 
+    // tODO:  fix autobots
     fun auto() {
         if (board.gameOver) return
 
@@ -261,6 +276,7 @@ class GameViewModel : ViewModel() {
 
         var overlay = _uiState.value.overlay
         val beforeMoves = _uiState.value.moves
+        val beforeRemainingSafe = board.remainingSafe
 
         var prevTotalMoves = 0
         var totalMoves = 0
@@ -284,9 +300,13 @@ class GameViewModel : ViewModel() {
         if (totalChanges.empty) return
 
         history.push(
-            HistoryEntry(Move(-1, Action.INVALID, MoveKind.AUTO),
-                totalChanges,
-                beforeMoves))
+            HistoryEntry(
+                move = Move(-1, Action.INVALID, MoveKind.AUTO),
+                changes = totalChanges,
+                moveCountBefore = beforeMoves,
+                remainingSafeBefore = beforeRemainingSafe
+            )
+        )
 
         if (!totalChanges.gameOver and _uiState.value.isEnumerate) {
             overlay = analyzer.analyze(board)
@@ -319,9 +339,13 @@ class GameViewModel : ViewModel() {
     fun hint(gid: Int) {
         if (board.isRevealedGid(gid)) return
         if (board.isMine(gid)) {
-            dispatch(Action.FLAG, gid)
+            if (!board.isFlagged(gid))
+                dispatch(Action.FLAG, gid)
         }
         else {
+            if (board.isFlagged(gid)) {
+                dispatch(Action.FLAG, gid)
+            }
             dispatch(Action.OPEN, gid)
         }
     }
@@ -374,7 +398,7 @@ class GameViewModel : ViewModel() {
 
         if (_uiState.value.isEnumerate) {
             overlay = analyzer.analyze(board)
-            val n = (0..((board.rows * board.cols)-1)).toSet()
+            val n = (0..<(board.rows * board.cols)).toSet()
             conflictDelta = board.conflictsByGid(n)
         }
 
