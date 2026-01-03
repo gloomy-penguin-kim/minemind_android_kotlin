@@ -1,5 +1,8 @@
 package com.kim.minemind.core
 
+import androidx.compose.ui.graphics.Color
+import kotlinx.serialization.descriptors.StructureKind
+
 enum class CellType(val num: Int ) {
     MINE(-1),
     UNKNOWN(0),
@@ -29,12 +32,12 @@ private val PROBABILITY_BUCKETS = listOf(
     ProbabilityBucket(",",   0.15f,  0.25f),
     ProbabilityBucket(":",   0.25f,  0.35f),
     ProbabilityBucket("~",   0.35f,  0.45f),
-    ProbabilityBucket("=",   0.45f,  0.55f),
-    ProbabilityBucket("+",   0.55f,  0.65f),
-    ProbabilityBucket("*",   0.65f,  0.75f),
-    ProbabilityBucket("#",   0.75f,  0.85f),
+    ProbabilityBucket("+",   0.45f,  0.55f),
+    ProbabilityBucket("*",   0.55f,  0.65f),
+    ProbabilityBucket("#",   0.65f,  0.75f),
+    ProbabilityBucket("%",   0.75f,  0.85f),
     ProbabilityBucket("&",   0.85f,  0.95f),
-    ProbabilityBucket("X",   0.95f,  1.0f),
+    ProbabilityBucket("F",   0.95f,  1.0f),
 )
 
 fun probabilityToGlyph(p: Float?): String {
@@ -47,6 +50,3 @@ fun probabilityBucketFor(p: Float?): ProbabilityBucket? {
     return PROBABILITY_BUCKETS.firstOrNull { v >= it.min && v <= it.max }
 }
 
-enum class SettingDisplayType {
-    NUMBERS, COLORS, LETTERS, RANDOM_LETTERS
-}

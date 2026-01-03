@@ -1,10 +1,16 @@
 package com.kim.minemind.ui.state
 
 import com.kim.minemind.analysis.AnalyzerOverlay
+import com.kim.minemind.ui.settings.DisplaySettings
 import com.kim.minemind.core.TapMode
 import com.kim.minemind.shared.ConflictList
 import com.kim.minemind.shared.Move
 
+
+data class GameVisualState(
+    val shuffledGlyphs: List<String>? = null,
+    val shuffledColors: List<Long>? = null,
+)
 
 data class GameUiState(
     val rows: Int = 9,
@@ -21,6 +27,9 @@ data class GameUiState(
     val overlay: AnalyzerOverlay = AnalyzerOverlay(),
     val isVerify: Boolean = false,
     val isEnumerate: Boolean = false,
+
+    val settings: DisplaySettings = DisplaySettings(),
+    val visual: GameVisualState = GameVisualState()
 )
 
 data class CellUI(

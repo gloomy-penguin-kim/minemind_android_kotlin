@@ -43,6 +43,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import com.kim.minemind.ui.settings.AdjDisplayMode
+import com.kim.minemind.core.AdjGlyphSet
+import com.kim.minemind.ui.settings.DisplaySettings
 import com.kim.minemind.core.TapMode
 import com.kim.minemind.core.probabilityToGlyph
 import com.kim.minemind.ui.state.GameUiState
@@ -118,6 +121,7 @@ fun GameScreen(vm: GameViewModel) {
     val ui by vm.uiState.collectAsState()
     var infoGid by remember { mutableStateOf<Int?>(null) }
     var optionsOpen by remember { mutableStateOf(false) }
+
 
     Scaffold(
         topBar = {
@@ -753,18 +757,6 @@ fun BoardFrame(
                     // •
                     // https://materialui.co/colors
                     // https://material-theme.com/docs/reference/color-palette/
-                    val dots = listOf(
-                        Color(0xFF21B615),
-                        Color(0xFFA335EC),
-                        Color(0xFF1C721A),
-                        Color(0xFFE53935),
-                        Color(0xFF4653C7),
-                        Color(0xFFFFEB3B),
-                        Color(0xFFE59630),
-                        Color(0xFFC485B9),
-                        Color(0xFF2196F3),
-                    )
-
 
                     val flagBlueColor = Color(0xFF61AEEF)
                     val revealedFont = Color(0xFFFFFFFF)
@@ -835,7 +827,6 @@ fun BoardFrame(
                         }
                     }
 
-                    if
                     Box(
                         modifier = Modifier
                             .size(cellSize)
@@ -875,3 +866,37 @@ fun BoardFrame(
         }
     }
 }
+
+
+fun resolveAdjGlyph(
+    adj: Int,
+    settings: DisplaySettings,
+    glyphSets: Map<String, AdjGlyphSet>,
+    shuffledGlyphs: List<String>? = null
+): String? {
+    if (settings.adjMode == AdjDisplayMode.COLORS) return null
+    val glyphs = shuffledGlyphs ?: glyphSets[settings.glyphSetId]!!.glyphs
+    return glyphs[adj]
+}
+
+fun resolveAdjColor(
+    adj: Int,
+    settings: DisplaySettings,
+    palettes: Map<String, List<Long>>
+): Color {
+    val argb = palettes[settings.paletteId]!![adj]
+    return Color(argb)
+}
+
+
+
+//@Preview
+//@Composable
+//fun PreviewLettersArabic() {
+//    CellPreview(
+//        settings = DisplaySettings(
+//            adjMode = AdjDisplayMode.LETTERS,
+//            glyphSetId = "arabic_letters"
+//        )
+//    )
+//}

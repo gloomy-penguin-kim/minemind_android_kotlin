@@ -18,7 +18,15 @@ import com.kim.minemind.core.history.HistoryStack
 import android.util.Log
 import com.kim.minemind.shared.ConflictDelta
 import com.kim.minemind.shared.ConflictList
+import com.kim.minemind.ui.settings.AdjDisplayMode
 
+import com.kim.minemind.ui.settings.DisplaySettings
+import com.kim.minemind.ui.settings.LangTag
+import com.kim.minemind.ui.settings.ShuffleMode
+import com.kim.minemind.ui.settings.uiStringsByLang
+
+
+// settings.collectAsState()
 class GameViewModel : ViewModel() {
     companion object {
         private const val TAG = "ui.GameViewModel"
@@ -35,7 +43,6 @@ class GameViewModel : ViewModel() {
     private fun idx(r: Int, c: Int, cols: Int) = r * cols + c
 
 
-
     init {
         newGame(rows=25, cols= 25, mines=150)
     }
@@ -45,12 +52,14 @@ class GameViewModel : ViewModel() {
         analyzer.clear()
         history.clear()
         board = Board(rows, cols, mines, seed = 0)
+        val settings = _uiState.value.settings
         _uiState.value = GameUiState(
             rows = rows,
             cols = cols,
             mines = mines,
             moves = 0,
-            cells = buildCells(board)
+            cells = buildCells(board, analyzer.analyze(board)),
+            settings = DisplaySettings(),
         )
     }
     fun handleTopMenu(action: TopMenuAction) {
@@ -451,6 +460,9 @@ class GameViewModel : ViewModel() {
         }
         return out
     }
+
+
+    /////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 }
