@@ -1,5 +1,10 @@
 package com.kim.minemind.ui.settings
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import kotlin.String
 import kotlin.collections.Map
 
@@ -233,52 +238,18 @@ import kotlin.collections.Map
 
 
 data class ThemeColors(
-    val flagBlueArgb: Long = 0xFF61AEEF,
-    val revealedFontArgb: Long = 0xFFFFFFFF,
-    val revealedBgArgb: Long = 0xFF4D515D,
-    val hiddenBgArgb: Long = 0xFF282C34,
-    val explodedBgArgb: Long = 0xFFF78C6C,
-    val incorrectArgb: Long = 0xFFC792EA,
-    val probabilityArgb: Long = 0xFF7286BF,
-    val rulesArgb: Long = 0xFF7286BF,
+    val flagBackground: Long = 0xFF61AEEF,
+    val revealedFont: Long = 0xFFFFFFFF,
+    val revealedBackground: Long = 0xFF4D515D,
+    val hiddenBackground: Long = 0xFF282C34,
+    val explodedBackground: Long = 0xFFF78C6C,
+    val incorrect: Long = 0xFFC792EA,
+    val probabilityFont: Long = 0xFF7286BF,
+    val rulesFont: Long = 0xFF7286BF,
 )
 
-data class DisplaySettings(
-    val uiLang: LangTag = LangTag("en"),
-    val adjMode: AdjDisplayMode = AdjDisplayMode.NUMBERS,
-    val glyphSetId: String = "latin_digits",
-    val paletteId: String = "classic",
-    val theme: ThemeColors = ThemeColors(),
-    val shuffleMode: ShuffleMode = ShuffleMode.OFF,
-)
-
-fun DisplaySettings.withAdjMode(mode: AdjDisplayMode) =
-    copy(adjMode = mode)
-
-fun DisplaySettings.toggleShuffle() =
-    if (shuffleMode == ShuffleMode.OFF)
-        copy(shuffleMode = ShuffleMode.ON)
-    else copy(shuffleMode = ShuffleMode.OFF)
-
-fun DisplaySettings.withGlyphSet(id: String) =
-    copy(glyphSetId = id)
-
-fun DisplaySettings.withPalette(id: String) =
-    copy(paletteId = id)
-
-fun DisplaySettings.withLang(lang: LangTag) =
-    copy(uiLang = lang)
-
-fun DisplaySettings.withTheme(theme: ThemeColors) =
-    copy(theme = theme)
-
-fun DisplaySettings.withShuffle(shuffle: ShuffleMode) =
-    copy(shuffleMode = shuffle)
 
 
-
-
-enum class AdjDisplayMode { NUMBERS, LETTERS, COLORS, EMOJI }
 enum class ShuffleMode { OFF, ON }
 
 @JvmInline value class LangTag(val tag: String)
@@ -300,7 +271,14 @@ data class GlyphSet(
     val displayName: String,
     val description: String = "",
     val glyphs: List<String>, // store as Strings (Unicode)
+
 ) {
+
+    init {
+        require(glyphs.isNotEmpty()) { "GlyphSet $id has no glyphs" }
+    }
+
+    fun forGlyphSet(): List<String> = glyphs.take(8)
     fun preview(max: Int = 8): List<String> = glyphs.take(max)
 
     /** For Minesweeper adjacency: typically 1..8 */
@@ -332,7 +310,6 @@ val uiStringsByLang: Map<LangTag, UiStrings> = mapOf(
 
 
 object VisualCatalog {
-
     val numeralSets: List<GlyphSet> = listOf(
        GlyphSet(
             id = "latin_digits",
@@ -344,7 +321,7 @@ object VisualCatalog {
             id = "sanskrit_digits",
             displayName = "Sanskrit Numerals",
             description = "संस्कृत संख्या",
-            glyphs = listOf("१", "२", "३", "४", "५", "६", "७", "८")
+            glyphs = listOf("१", "२", "३", "४", "५", "६", "७", "८","९")
        ),
        GlyphSet(
             id = "chinese_digits",
@@ -353,8 +330,8 @@ object VisualCatalog {
             glyphs = listOf("一", "二", "三", "四", "五", "六", "七", "八", "九", "十")
         ),
         GlyphSet(
-            id = "kannada_digits",
-            displayName = "Kannada Numerals",
+            id = "malayalam_digits",
+            displayName = "Malayalam Numerals",
             description = "മലയാളം സംഖ്യകൾ",
             glyphs = listOf("൧", "൨", "൩", "൪", "൫", "൬", "൭", "൮", "൯")
         ),
@@ -398,7 +375,7 @@ object VisualCatalog {
             id = "bengali_digits",
             displayName = "Bengali Numerals",
             description = "বাংলা সংখ্যা",
-            glyphs = listOf("১ ", "২", "৩", "৪", "৫", "৬", "৭", "৮", "৯")
+            glyphs = listOf("১", "২", "৩", "৪", "৫", "৬", "৭", "৮", "৯")
         ),
         GlyphSet(
             id = "hebrew_digits",
@@ -835,9 +812,54 @@ object VisualCatalog {
         )
     )
 
-
+    val ThemeSets: List<ThemeColorSet> = listOf(
+        ThemeColorSet(),
+        ThemeColorSet(
+            description = "dark",
+            flagBackground = 0xFF80CBC4,
+            revealedFont = 0xFFFFFFFF,
+            revealedBackground = 0xFF4D515D,
+            hiddenBackground = 0xFF282C34,
+            explodedBackground = 0xFFF78C6C,
+            incorrect = 0xFFC5CAE9,
+            conflict = 0xFFC5CAE9,
+            probabilityFont = 0xFF9FA8DA,
+            rulesFont = 0xFFC5CAE9,
+            gameBorder = 0xFF282A36,
+            gameBackground = 0xFF111318,
+        ),
+        ThemeColorSet(
+            description = "light",
+            flagBackground = 0xFFB3E5FC,
+            revealedFont = 0xFF455A64,
+            revealedBackground = 0xFF607D8B,
+            hiddenBackground = 0xfdB0BEC5,
+            explodedBackground = 0xFFEF9A9A,
+            incorrect = 0xFFFFF59D,
+            conflict = 0xFF90A4AE,
+            probabilityFont = 0xFF7986CB,
+            rulesFont = 0xFF7986CB,
+            gameBorder = 0xFFE7E7E8,
+            gameBackground = 0xFFF3F4F5,
+        )
+    )
 
     fun numeral(id: String) = numeralSets.first { it.id == id }
     fun alpha(id: String) = alphaSets.first { it.id == id }
     fun colors(id: String) = colorSets.first { it.id == id }
 }
+
+data class ThemeColorSet(
+    val description: String = "default",
+    val flagBackground: Long = 0xFF61AEEF,
+    val revealedFont: Long = 0xFFFFFFFF,
+    val revealedBackground: Long = 0xFF4D515D,
+    val hiddenBackground: Long = 0xFF282C34,
+    val explodedBackground: Long = 0xFFF78C6C,
+    val incorrect: Long = 0xFFC792EA,
+    val conflict: Long = 0xFFC792EA,
+    val probabilityFont: Long = 0xFF7286BF,
+    val rulesFont: Long = 0xFF7286BF,
+    val gameBorder: Long = 0xFF282A36,
+    val gameBackground: Long = 0xFF111318,
+)

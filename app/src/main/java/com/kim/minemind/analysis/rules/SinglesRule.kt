@@ -1,10 +1,6 @@
 package com.kim.minemind.analysis.rules
 
 import com.kim.minemind.analysis.frontier.Component
-import com.kim.minemind.shared.Move
-import com.kim.minemind.analysis.rules.RuleAggregator
-import com.kim.minemind.core.Action
-import com.kim.minemind.core.MoveKind
 import com.kim.minemind.shared.ReasonList
 import java.util.BitSet
 
@@ -24,13 +20,11 @@ fun singlesRule (
             while (bit >= 0) {
                 val gid = comp.localToGlobal[bit]
 
-                moves.addMove((mask.clone() as BitSet),
+                moves.addRule((mask.clone() as BitSet),
                             comp.localToGlobal,
-                    Move(
-                        gid,
-                        Action.OPEN,
-                        MoveKind.RULE,
-                        ReasonList(initReasons = listOf("Singles: remaining == 0 are SAFE"))
+                    Rule(gid=gid,
+                        type=RuleType.SAFE,
+                        reasons=ReasonList(initReasons = listOf("Singles: remaining == 0 are SAFE"))
                     )
                 )
 
@@ -45,13 +39,11 @@ fun singlesRule (
             while (bit >= 0) {
                 val gid = comp.localToGlobal[bit]
 
-                moves.addMove((mask.clone() as BitSet),
+                moves.addRule((mask.clone() as BitSet),
                     comp.localToGlobal,
-                    Move(
-                        gid,
-                        Action.FLAG,
-                        MoveKind.RULE,
-                        ReasonList(initReasons = listOf("Singles: remaining == |scope| are MINES"))
+                    Rule(gid=gid,
+                        type=RuleType.MINE,
+                        reasons=ReasonList(initReasons = listOf("Singles: remaining == |scope| are MINES"))
                     )
                 )
 

@@ -3,11 +3,8 @@ package com.kim.minemind.analysis.rules
 import com.kim.minemind.core.Action
 import com.kim.minemind.core.board.Board
 import com.kim.minemind.shared.ConflictList
-import com.kim.minemind.shared.Move
 import java.util.BitSet
 import kotlin.collections.MutableMap
-
-import com.kim.minemind.shared.ReasonList
 
 class RuleAggregator(
     private val board: Board = Board(rows = 0, cols = 0, mines = 0, seed = 0),
@@ -15,13 +12,13 @@ class RuleAggregator(
 ) {
 
     // gid -> move
-    private val moves: MutableMap<Int, Move> = LinkedHashMap()
+    private val moves: MutableMap<Int, Rule> = LinkedHashMap()
 
     private val conflicts: ConflictList = ConflictList()
 
     val forcedFlags: MutableSet<Int> = HashSet()
     val forcedOpens: MutableSet<Int> = HashSet()
-    val ruleActionByGid: MutableMap<Int, Action> = LinkedHashMap()
+    val actionByGid: MutableMap<Int, Action> = LinkedHashMap()
 
     val keys: Set<Int> = moves.keys
 
@@ -29,44 +26,42 @@ class RuleAggregator(
         return conflicts
     }
 
-    fun getMoves(): Map<Int, Move> {
+    fun getRules(): Map<Int, Rule> {
         return moves
     }
 
-    fun addMove(mask: BitSet, localToGlobal: IntArray, move: Move) {
+    fun addRule(mask: BitSet, localToGlobal: IntArray, rule: Rule) {
         if (stopAfterOne && moves.isNotEmpty()) return
 
-        val gid = move.gid
+        val gid = rule.gid
         val existing = moves[gid]
 
         if (board.cells[gid].isFlagged or board.cells[gid].isRevealed) return
 
         if (gid in conflicts.keys) {
-            conflicts.addConflict(gid, move.reasons)
+            conflicts.addConflict(gid, rule.reasons)
             return
         }
 
         // this is a new gid and not found in the conflicts or
         // in the
         if (existing == null) {
-            if (move.action == Action.FLAG) {
-                moves[gid] = move
+            if (rule.type == RuleType.MINE) {
+                moves[gid] = rule
                 forcedFlags.add(gid)
             }
-            else if (move.action == Action.OPEN) {
-                moves[gid] = move
+            else if (rule.type == RuleType.SAFE) {
+                moves[gid] = rule
                 forcedOpens.add(gid)
             }
-            ruleActionByGid[gid] = move.action
+            actionByGid[gid] = rule.toAction()
+
             return
         }
 
-        if (existing.action == move.action) {
-            if (existing.reasons != move.reasons) {
-//                val reasons: MutableList<String> = existing.reasons.toMutableList()
-//                reasons.addAll(move.reasons)
-//                moves[gid] = Move(existing.gid, existing.action, existing.moveKind, reasons)
-                existing.reasons.addReasons(move.reasons)
+        if (existing.type == rule.type) {
+            if (existing.reasons != rule.reasons) {
+                existing.reasons.addReasons(rule.reasons)
             }
             return
         }
@@ -74,8 +69,8 @@ class RuleAggregator(
 
        // Conflict: record both reasons and remove the move from moves
 
-        conflicts.addConflict(gid, existing.reasons)
-        conflicts.addConflict(gid, move.reasons)
+        conflicts.addConflict(gid, reasonList=existing.reasons)
+        conflicts.addConflict(gid, reasonList=rule.reasons)
 
 
 //        existing.reasons.forEach { r ->
@@ -97,8 +92,8 @@ class RuleAggregator(
 
         conflicts.addConflict(gid, reasons)
 
-        if (ruleActionByGid.contains(gid)) {
-            ruleActionByGid.remove(gid)
+        if (actionByGid.contains(gid)) {
+            actionByGid.remove(gid)
         }
         if (forcedOpens.contains(gid)) {
             forcedOpens.remove(gid)
@@ -125,3 +120,6 @@ class RuleAggregator(
     }
 
 }
+
+
+

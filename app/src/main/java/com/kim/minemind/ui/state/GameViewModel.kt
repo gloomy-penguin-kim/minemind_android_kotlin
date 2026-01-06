@@ -9,30 +9,34 @@ import kotlinx.coroutines.flow.update
 import com.kim.minemind.core.*
 import com.kim.minemind.analysis.Solver
 import com.kim.minemind.analysis.AnalyzerOverlay
-import com.kim.minemind.shared.Move
 import com.kim.minemind.core.board.Board
 import com.kim.minemind.core.history.ChangeSet
 import com.kim.minemind.core.history.HistoryEntry
 import com.kim.minemind.core.history.HistoryStack
 
 import android.util.Log
+import androidx.lifecycle.viewModelScope
+import com.kim.minemind.core.history.HistoryEvent
 import com.kim.minemind.shared.ConflictDelta
 import com.kim.minemind.shared.ConflictList
-import com.kim.minemind.ui.settings.AdjDisplayMode
+import com.kim.minemind.ui.settings.GlyphMode
+import com.kim.minemind.ui.settings.VisualResolver
+import com.kim.minemind.ui.settings.VisualState
+import com.kim.minemind.ui.settings.VisualSettings
+import com.kim.minemind.ui.settings.VisualSettingsRepository
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import java.util.Random
 
-import com.kim.minemind.ui.settings.DisplaySettings
-import com.kim.minemind.ui.settings.LangTag
-import com.kim.minemind.ui.settings.ShuffleMode
-import com.kim.minemind.ui.settings.uiStringsByLang
+class GameViewModel(
+    private val settingsRepo: VisualSettingsRepository,
+    private val visualResolver: VisualResolver,
+    private val savedStateRepo: GameStateRepository
+) : ViewModel(
+) {
 
-
-// settings.collectAsState()
-class GameViewModel : ViewModel() {
-    companion object {
-        private const val TAG = "ui.GameViewModel"
-    }
-
-    private val config = AnalysisConfig
     private var board: Board = Board(rows = 25, cols = 25, mines = 200, seed = 0)
     private var solver: Solver = Solver()
     private val analyzer: Analyzer = Analyzer()
@@ -40,26 +44,69 @@ class GameViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(GameUiState())
     val uiState: StateFlow<GameUiState> = _uiState
 
-    private fun idx(r: Int, c: Int, cols: Int) = r * cols + c
+//    private fun idx(r: Int, c: Int, cols: Int) = r * cols + c
+
+    // persisted settings (DataStore)
+
+
+    companion object {
+        private const val KEY_GAME_SNAPSHOT = "game_snapshot" // whatever you store
+        private const val TAG = "ui.GameViewModel"
+    }
+
+
+    val visualSettings: StateFlow<VisualSettings> =
+        settingsRepo.settingsFlow
+            .stateIn(viewModelScope, SharingStarted.Eagerly, VisualSettings())
+
+    // derived visuals (what the board/UI uses to draw labels)
+    val visualState: StateFlow<VisualState> =
+        visualSettings
+            .map { s -> visualResolver.resolve(s, Random(board.seed.toLong())) }
+            .stateIn(viewModelScope, SharingStarted.Eagerly,
+                VisualState(glyphs = (1..8).map { it.toString() }, colors = emptyList())
+            ) // as StateFlow<VisualState>
+
+    fun updateVisualSettings(transform: (VisualSettings) -> VisualSettings) {
+        viewModelScope.launch {
+            val newSettings = transform(visualSettings.value)
+            settingsRepo.set(newSettings)
+        }
+    }
+
+
+    // Example setters you’ll call from the modal:
+    fun setStyle(style: GlyphMode) = updateVisualSettings { it.copy(glyphMode = style) }
+    fun setNumeralSet(id: String) = updateVisualSettings { it.copy(numeralSetId = id) }
+    fun setAlphaSet(id: String) = updateVisualSettings { it.copy(alphaSetId = id) }
+    fun setShuffleGlyphs(on: Boolean) = updateVisualSettings { it.copy(shuffleGlyphs = on) }
+    fun setShuffleColors(on: Boolean) = updateVisualSettings { it.copy(shuffleColors = on) }
 
 
     init {
         newGame(rows=25, cols= 25, mines=150)
+        val snapshot = savedStateRepo.get<String>(KEY_GAME_SNAPSHOT)
+        if (snapshot != null) {
+            // restoreGame(snapshot)
+        } else {
+            // startNewGame()
+        }
     }
 
+    private fun persist(snapshot: String) {
+        savedStateHandle[KEY_GAME_SNAPSHOT] = snapshot
+    }
     fun newGame(rows: Int, cols: Int, mines: Int) {
         solver.clear()
         analyzer.clear()
         history.clear()
         board = Board(rows, cols, mines, seed = 0)
-        val settings = _uiState.value.settings
         _uiState.value = GameUiState(
             rows = rows,
             cols = cols,
             mines = mines,
             moves = 0,
-            cells = buildCells(board, analyzer.analyze(board)),
-            settings = DisplaySettings(),
+            cells = buildCells(board, analyzer.analyze(board))
         )
     }
     fun handleTopMenu(action: TopMenuAction) {
@@ -82,14 +129,13 @@ class GameViewModel : ViewModel() {
         if (cs.empty) return
         history.push(
             HistoryEntry(
-                move = Move(gid, action, MoveKind.USER),
+                event = HistoryEvent.UserCommand(action, gid),
                 changes = cs,
                 moveCountBefore = beforeMoves,
                 remainingSafeBefore = beforeRemainingSafe
             )
         )
 
-        // TODO:  if the board says gameOver or something should probs still be ran?
         // TODO:  maybe separate out probs and rules so maybe they can be ran concurrently..?
 
         val overlay = if (!board.gameOver and _uiState.value.isEnumerate) analyzer.analyze(board) else AnalyzerOverlay()
@@ -171,80 +217,6 @@ class GameViewModel : ViewModel() {
         return updated
     }
 
-    fun step(): Int {
-        // take a rule if you can
-        // if not, probs and take the lowest prob and open/flag that based on what it actually is
-        if (board.gameOver) return -1
-
-        Log.d(TAG, "autobot")
-
-        var overlay = _uiState.value.overlay
-        var modifiedGid = -1
-
-        overlay = analyzer.runRulesOnly(board, stopAfterOne = false)
-        Log.d(TAG, "overlay is $overlay")
-
-        var oneMoveTaken = false
-        for (ruleAction in overlay.ruleActions) {
-            if ((ruleAction.value == Action.OPEN) and !board.isMine(ruleAction.key)) {
-                dispatch(ruleAction.value, ruleAction.key)
-                modifiedGid = ruleAction.key
-                oneMoveTaken = true
-                break
-            }
-        }
-        if (!oneMoveTaken) {
-            overlay = analyzer.analyze(board)
-            if (overlay.probabilities.isNotEmpty()) {
-                // ok go through prob to get the closest to either open or close
-                var minDiff = 1.0f
-                var minGid = -1
-                for ((gid, prob) in overlay.probabilities) {
-                    if (prob != null) {
-                        if (prob < 0.10f) {
-                            val diff = prob
-                            if (diff < minDiff) {
-                                minDiff = diff
-                                minGid = gid
-                            }
-                            if (diff == 0.0f) {
-                                break
-                            }
-                        }
-                    }
-                }
-
-                if (minGid != -1) {
-                    val action = if (board.isMine(minGid)) Action.FLAG else Action.OPEN
-                    dispatch(action, minGid)
-                    modifiedGid = minGid
-                    oneMoveTaken = true
-                }
-            }
-            else { // no probabilities listed
-                for (cell in _uiState.value.cells) {
-                    if (!cell.isRevealed and !cell.isFlagged and !cell.isMine) {
-                        dispatch(Action.OPEN, cell.gid)
-                        modifiedGid = cell.gid
-                        oneMoveTaken = true
-                        break
-                    }
-                }
-            }
-        }
-        if (!oneMoveTaken) {
-            for (cell in _uiState.value.cells) {
-                if (cell.isFlagged and !cell.isMine) {
-                    dispatch(Action.FLAG, cell.gid)
-                    dispatch(Action.OPEN, cell.gid)
-                    modifiedGid = cell.gid
-                    break
-                }
-            }
-        }
-        return modifiedGid
-    }
-
     // autoBuildCells(totalMove
     // s, board, overlay, csOpen, _uiState.value.conflictDelta, _uiState.value.conflictBoard)
     // TODO: make it so autobot doesn't make a wrong move ever
@@ -295,8 +267,16 @@ class GameViewModel : ViewModel() {
             Log.d(TAG, "overlay is $overlay")
             prevTotalMoves = totalMoves
             for (ruleAction in overlay.ruleActions) {
+                // this actually does check the board for mines because I don't want autobot to blow
+                // up anyones game.  i can stop the autobot before/when it hits a mine and just stop there
+                // and say it cannot continue but skipping the area (conflict area) seems okay because
+                // even if there weren't conflicts beforehand it seems that now there are always a lot after
+                // if flags are incorrectly placed
+                // the autobot currently stops when no more RULES can be applied, it does not use the
+                // probability data, even if it is a sure thing.  this is a change since the python code
                 if ((ruleAction.value == Action.OPEN) and board.isMine(ruleAction.key)) continue
                 if ((ruleAction.value == Action.FLAG) and !board.isMine(ruleAction.key)) continue
+
                 val cs = board.apply(ruleAction.value, ruleAction.key)
                 autoBuildCells(totalMoves, board, overlay, cs, ConflictDelta(), _uiState.value.conflictBoard)
                 totalChanges = totalChanges.merged(cs)
@@ -310,7 +290,7 @@ class GameViewModel : ViewModel() {
 
         history.push(
             HistoryEntry(
-                move = Move(-1, Action.INVALID, MoveKind.AUTO),
+                event = HistoryEvent.ApplyRecommendations(totalMoves),
                 changes = totalChanges,
                 moveCountBefore = beforeMoves,
                 remainingSafeBefore = beforeRemainingSafe
@@ -345,19 +325,8 @@ class GameViewModel : ViewModel() {
         }
     }
 
-    fun hint(gid: Int) {
-        if (board.isRevealedGid(gid)) return
-        if (board.isMine(gid)) {
-            if (!board.isFlagged(gid))
-                dispatch(Action.FLAG, gid)
-        }
-        else {
-            if (board.isFlagged(gid)) {
-                dispatch(Action.FLAG, gid)
-            }
-            dispatch(Action.OPEN, gid)
-        }
-    }
+    fun hint(gid: Int) { }
+
     fun verify() {
         val v = _uiState.value.isVerify
         _uiState.update { s ->
@@ -463,6 +432,8 @@ class GameViewModel : ViewModel() {
 
 
     /////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 
 
 }

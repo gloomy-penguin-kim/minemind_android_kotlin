@@ -1,9 +1,8 @@
 package com.kim.minemind.analysis
 
+import com.kim.minemind.analysis.rules.Rule
 import com.kim.minemind.core.Action
 import com.kim.minemind.shared.ConflictList
-import com.kim.minemind.shared.Move
-import com.kim.minemind.shared.ReasonList
 
 data class AnalyzerOverlay(
     val probabilities: Map<Int, Float?> = emptyMap(),  // gid -> p(mine)
@@ -15,7 +14,7 @@ data class AnalyzerOverlay(
 
     var conflictProbs: ConflictList = ConflictList(),
 
-    val ruleList: Map<Int, Move> = LinkedHashMap(),
+    val ruleList: Map<Int, Rule> = LinkedHashMap(),
 
     val isConsistent: Boolean = true
 )

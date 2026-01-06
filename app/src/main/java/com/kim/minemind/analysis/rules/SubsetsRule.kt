@@ -1,10 +1,7 @@
 package com.kim.minemind.analysis.rules
 
 import com.kim.minemind.analysis.frontier.Component
-import com.kim.minemind.shared.Move
-import com.kim.minemind.analysis.rules.RuleAggregator
 import com.kim.minemind.core.Action
-import com.kim.minemind.core.MoveKind
 import com.kim.minemind.shared.ReasonList
 import java.util.BitSet
 
@@ -31,23 +28,19 @@ fun subsetsRule (
             val gid = comp.localToGlobal[bit]  // IMPORTANT: bit is the local index
             // optionally skip if already revealed/flagged
             if (action == Action.OPEN) {
-                moves.addMove(mask,
+                moves.addRule(mask,
                     comp.localToGlobal,
-                    Move(
-                        gid,
-                        Action.OPEN,
-                        MoveKind.RULE,
-                        ReasonList(initReasons = reasons)
+                    Rule(gid=gid,
+                        type=RuleType.SAFE,
+                        reasons=ReasonList(initReasons = reasons)
                     )
                 )
             } else if (action == Action.FLAG) {
-                moves.addMove(mask,
+                moves.addRule(mask,
                     comp.localToGlobal,
-                    Move(
-                        gid,
-                        Action.FLAG,
-                        MoveKind.RULE,
-                        ReasonList(initReasons = reasons)
+                    Rule(gid=gid,
+                        type=RuleType.MINE,
+                        reasons=ReasonList(initReasons = reasons)
                     )
                 )
             }
@@ -119,7 +112,7 @@ fun subsetsRule (
 //                        "${b} is a subset of",
 //                        "${a}"
                     )
-
+                    // TODO: maybe change reason list to accept reasons as muiltiline lists... maybe
                     processMovesForMask((diff.clone() as BitSet), Action.FLAG, reasons)
                     if (stopAfterOne && moves.isNotEmpty()) return
                 }

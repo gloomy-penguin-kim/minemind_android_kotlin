@@ -1,6 +1,5 @@
 package com.kim.minemind.analysis.rules
 
-import com.kim.minemind.shared.Move
 import com.kim.minemind.core.Action
 import com.kim.minemind.shared.ConflictList
 
@@ -10,5 +9,5 @@ data class RuleResult (
     val ruleActionByGid: Map<Int, Action>,
 
     val conflictList: ConflictList = ConflictList(),
-    val ruleList: Map<Int, Move> = LinkedHashMap()
+    val ruleList: Map<Int, Rule> = LinkedHashMap()
 )

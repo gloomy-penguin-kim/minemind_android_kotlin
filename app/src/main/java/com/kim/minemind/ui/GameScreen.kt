@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
@@ -43,11 +44,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
-import com.kim.minemind.ui.settings.AdjDisplayMode
-import com.kim.minemind.core.AdjGlyphSet
-import com.kim.minemind.ui.settings.DisplaySettings
+import com.kim.minemind.analysis.rules.Rule
 import com.kim.minemind.core.TapMode
 import com.kim.minemind.core.probabilityToGlyph
+import com.kim.minemind.ui.settings.ColorSet
+import com.kim.minemind.ui.settings.GlyphMode
+import com.kim.minemind.ui.settings.GlyphSet
+import com.kim.minemind.ui.settings.VisualCatalog
+import com.kim.minemind.ui.settings.VisualSettings
 import com.kim.minemind.ui.state.GameUiState
 
 
@@ -142,7 +146,6 @@ fun GameScreen(vm: GameViewModel) {
                 onVerify = vm::verify,
                 onEnumerate = vm::enumerate,
                 onAuto = vm::auto,
-                onStep = vm::step,
                 onUndo = vm::undo,
 
                 // TODO: make it so hint stays selected and maybe nothing in the bottom menu is selected
@@ -212,7 +215,7 @@ fun CellInfoDialog(
 ) {
     val cols = ui.cols
     val isEnumerate = ui.isEnumerate
-    val rules = ui.ruleList
+    val rules: Map<Int, Rule> = ui.ruleList
     val conflicts = ui.conflictBoard.merge(ui.conflictProbs)
 
     val (r, c) = remember(cell.gid, cols) { divmod(cell.gid, cols) } // helper below
@@ -282,7 +285,7 @@ fun CellInfoDialog(
                     } else if (cell.gid in rules.keys) {
                         HorizontalDivider()
                         Text("Matching Rules:", fontWeight = FontWeight.SemiBold)
-                        rules.get(cell.gid)?.reasons?.getReasons()?.forEach {
+                        rules[cell.gid]?.reasons?.getReasons()?.forEach {
                             Text("\t- $it", style = MaterialTheme.typography.bodySmall)
                         }
                     }
@@ -551,7 +554,6 @@ fun OptionsFabMenu(
     onExpandedChange: (Boolean) -> Unit,
 
     onUndo: () -> Unit,
-    onStep: () -> Unit,
     onAuto: () -> Unit,
     onVerify: () -> Unit,
     onEnumerate: () -> Unit,
@@ -582,8 +584,6 @@ fun OptionsFabMenu(
                 SmallActionPill(label = "Hint") { onExpandedChange(false); onHint(); }
                 Spacer(Modifier.height(10.dp))
                 SmallActionPill(label = "Autobot") { onExpandedChange(false); onAuto(); }
-                Spacer(Modifier.height(10.dp))
-                SmallActionPill(label = "Step") { onExpandedChange(false); onStep() }
                 Spacer(Modifier.height(10.dp))
                 SmallActionPill(label = "Undo") { onExpandedChange(false); onUndo() }
                 Spacer(Modifier.height(55.dp))
@@ -868,35 +868,325 @@ fun BoardFrame(
 }
 
 
-fun resolveAdjGlyph(
-    adj: Int,
-    settings: DisplaySettings,
-    glyphSets: Map<String, AdjGlyphSet>,
-    shuffledGlyphs: List<String>? = null
-): String? {
-    if (settings.adjMode == AdjDisplayMode.COLORS) return null
-    val glyphs = shuffledGlyphs ?: glyphSets[settings.glyphSetId]!!.glyphs
-    return glyphs[adj]
+@Composable
+fun VisualSettingsScreen(
+    settings: VisualSettings,
+    onChange: (VisualSettings) -> Unit,
+) {
+    Column(Modifier.fillMaxSize().padding(16.dp)) {
+
+        Text("Cell Glyphs", style = MaterialTheme.typography.titleLarge)
+        Spacer(Modifier.height(12.dp))
+
+        ModeSelector(
+            mode = settings.glyphMode,
+            onMode = { onChange(settings.copy(glyphMode = it)) }
+        )
+
+        Spacer(Modifier.height(16.dp))
+
+        when (settings.glyphMode) {
+            GlyphMode.NUMERALS -> {
+                GlyphSetPicker(
+                    title = "Numeral Set",
+                    sets = VisualCatalog.numeralSets,
+                    selectedId = settings.numeralSetId,
+                    onSelect = { onChange(settings.copy(numeralSetId = it)) }
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Switch(
+                        checked = settings.shuffleGlyphs,
+                        onCheckedChange = { onChange(settings.copy(shuffleGlyphs = it)) }
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("Shuffle numerals")
+                }
+                PreviewRowStrings(VisualCatalog.numeral(settings.numeralSetId).preview())
+            }
+
+            GlyphMode.ALPHABET -> {
+                GlyphSetPicker(
+                    title = "Alphabet Set",
+                    sets = VisualCatalog.alphaSets,
+                    selectedId = settings.alphaSetId,
+                    onSelect = { onChange(settings.copy(alphaSetId = it)) }
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Switch(
+                        checked = settings.shuffleGlyphs,
+                        onCheckedChange = { onChange(settings.copy(shuffleGlyphs = it)) }
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("Shuffle letters")
+                }
+                PreviewRowStrings(VisualCatalog.alpha(settings.alphaSetId).preview())
+            }
+
+            GlyphMode.COLORS -> {
+                ColorSetPicker(
+                    title = "Color Set",
+                    sets = VisualCatalog.colorSets,
+                    selectedId = settings.colorSetId,
+                    onSelect = { onChange(settings.copy(colorSetId = it)) }
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Switch(
+                        checked = settings.shuffleColors,
+                        onCheckedChange = { onChange(settings.copy(shuffleColors = it)) }
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("Shuffle colors")
+                }
+                PreviewRowColors(VisualCatalog.colors(settings.colorSetId).preview())
+            }
+        }
+    }
 }
 
-fun resolveAdjColor(
-    adj: Int,
-    settings: DisplaySettings,
-    palettes: Map<String, List<Long>>
-): Color {
-    val argb = palettes[settings.paletteId]!![adj]
-    return Color(argb)
+@Composable
+private fun ModeSelector(mode: GlyphMode, onMode: (GlyphMode) -> Unit) {
+    Column {
+        Text("Mode", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(6.dp))
+        GlyphMode.entries.forEach { m ->
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                RadioButton(selected = (mode == m), onClick = { onMode(m) })
+                Spacer(Modifier.width(8.dp))
+                Text(m.name.lowercase().replaceFirstChar { it.uppercase() })
+            }
+        }
+    }
+}
+
+@Composable
+private fun GlyphSetPicker(
+    title: String,
+    sets: List<GlyphSet>,
+    selectedId: String,
+    onSelect: (String) -> Unit,
+) {
+    Text(title, style = MaterialTheme.typography.titleMedium)
+    Spacer(Modifier.height(6.dp))
+
+    // Simple dropdown-ish list; later you can swap to ExposedDropdownMenuBox.
+    sets.forEach { set ->
+        val selected = set.id == selectedId
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp)
+                .then(if (selected) Modifier else Modifier),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            RadioButton(selected = selected, onClick = { onSelect(set.id) })
+            Spacer(Modifier.width(8.dp))
+            Column {
+                Text(set.displayName)
+                if (set.description.isNotBlank()) {
+                    Text(set.description, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ColorSetPicker(
+    title: String,
+    sets: List<ColorSet>,
+    selectedId: String,
+    onSelect: (String) -> Unit,
+) {
+    Text(title, style = MaterialTheme.typography.titleMedium)
+    Spacer(Modifier.height(6.dp))
+
+    sets.forEach { set ->
+        val selected = set.id == selectedId
+        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            RadioButton(selected = selected, onClick = { onSelect(set.id) })
+            Spacer(Modifier.width(8.dp))
+            Column {
+                Text(set.displayName)
+                if (set.description.isNotBlank()) {
+                    Text(set.description, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PreviewRowStrings(items: List<String>) {
+    Spacer(Modifier.height(10.dp))
+    Text("Preview", style = MaterialTheme.typography.titleSmall)
+    Spacer(Modifier.height(6.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items.forEach { s ->
+            Surface(tonalElevation = 2.dp, shape = MaterialTheme.shapes.small) {
+                Text(s, Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun PreviewRowColors(items: List<Long>) {
+    Spacer(Modifier.height(10.dp))
+    Text("Preview", style = MaterialTheme.typography.titleSmall)
+    Spacer(Modifier.height(6.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items.forEach { argb ->
+            Surface(tonalElevation = 2.dp, shape = MaterialTheme.shapes.small) {
+                Box(
+                    Modifier
+                        .size(26.dp)
+                        .background(androidx.compose.ui.graphics.Color(argb))
+                )
+            }
+        }
+    }
 }
 
 
+@Composable
+fun VisualSettingsSheet(
+    vm: GameViewModel,
+    onClose: () -> Unit,
+    numeralSets: List<GlyphSet>,
+    alphaSets: List<GlyphSet>,
+    palettes: List<ColorSet>,
+) {
+    val s by vm.visualSettings.collectAsState()
 
-//@Preview
-//@Composable
-//fun PreviewLettersArabic() {
-//    CellPreview(
-//        settings = DisplaySettings(
-//            adjMode = AdjDisplayMode.LETTERS,
-//            glyphSetId = "arabic_letters"
-//        )
-//    )
-//}
+    Column(Modifier.padding(16.dp)) {
+        Text("Visual Settings", style = MaterialTheme.typography.titleLarge)
+
+        Spacer(Modifier.height(12.dp))
+
+        // Mode picker (simple)
+        Row {
+            ModeChip("Numbers", s.glyphMode == GlyphMode.NUMERALS) {
+                vm.updateVisualSettings { it.copy(glyphMode = GlyphMode.NUMERALS) }
+            }
+            Spacer(Modifier.width(8.dp))
+            ModeChip("Alphabet", s.glyphMode == GlyphMode.ALPHABET) {
+                vm.updateVisualSettings { it.copy(glyphMode = GlyphMode.ALPHABET) }
+            }
+            Spacer(Modifier.width(8.dp))
+            ModeChip("Colors", s.glyphMode == GlyphMode.COLORS) {
+                vm.updateVisualSettings { it.copy(glyphMode = GlyphMode.COLORS) }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        when (s.glyphMode) {
+            GlyphMode.NUMERALS -> {
+                SetDropdown(
+                    label = "Numeral set",
+                    selectedId = s.numeralSetId,
+                    options = numeralSets.map { it.id to it.displayName },
+                    onPick = { id -> vm.updateVisualSettings { it.copy(numeralSetId = id) } }
+                )
+                ToggleRow("Shuffle glyphs", s.shuffleGlyphs) { v ->
+                    vm.updateVisualSettings { it.copy(shuffleGlyphs = v) }
+                }
+                PreviewRow("Preview", previewGlyphs(numeralSets.first { it.id == s.numeralSetId }, count = 8))
+            }
+
+            GlyphMode.ALPHABET -> {
+                SetDropdown(
+                    label = "Alphabet set",
+                    selectedId = s.alphaSetId,
+                    options = alphaSets.map { it.id to it.displayName },
+                    onPick = { id -> vm.updateVisualSettings { it.copy(alphaSetId = id) } }
+                )
+                ToggleRow("Shuffle glyphs", s.shuffleGlyphs) { v ->
+                    vm.updateVisualSettings { it.copy(shuffleGlyphs = v) }
+                }
+                PreviewRow("Preview", previewAlpha(alphaSets.first { it.id == s.alphaSetId }, count = 8))
+            }
+
+            GlyphMode.COLORS -> {
+                SetDropdown(
+                    label = "Color palette",
+                    selectedId = s.colorSetId,
+                    options = palettes.map { it.id to it.displayName },
+                    onPick = { id -> vm.updateVisualSettings { it.copy(colorSetId = id) } }
+                )
+                ToggleRow("Shuffle colors", s.shuffleColors) { v ->
+                    vm.updateVisualSettings { it.copy(shuffleColors = v) }
+                }
+                // preview chips optional
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            TextButton(onClick = onClose) { Text("Done") }
+        }
+    }
+}
+
+@Composable
+private fun ModeChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    FilterChip(selected = selected, onClick = onClick, label = { Text(label) })
+}
+
+@Composable
+private fun ToggleRow(label: String, checked: Boolean, onChecked: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, Modifier.weight(1f))
+        Switch(checked = checked, onCheckedChange = onChecked)
+    }
+}
+
+@Composable
+private fun SetDropdown(
+    label: String,
+    selectedId: String,
+    options: List<Pair<String, String>>, // id to display
+    onPick: (String) -> Unit
+) {
+    // keep it simple; you can replace with ExposedDropdownMenuBox later
+    Column {
+        Text(label, style = MaterialTheme.typography.labelLarge)
+        options.forEach { (id, name) ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp)
+                    .combinedClickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = { onPick(id) }
+                ),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                RadioButton(selected = (id == selectedId), onClick = { onPick(id) })
+                Spacer(Modifier.width(8.dp))
+                Text(name)
+            }
+        }
+    }
+}
+
+private fun previewGlyphs(set: GlyphSet, count: Int): String {
+    // show first N glyphs for quick preview
+    return set.glyphs.take(count).joinToString("  ")
+}
+
+private fun previewAlpha(set: GlyphSet, count: Int): String {
+    return set.glyphs.take(count).joinToString("  ")
+}
+
+@Composable
+private fun PreviewRow(label: String, preview: String) {
+    Spacer(Modifier.height(8.dp))
+    Text(label, style = MaterialTheme.typography.labelLarge)
+    Text(preview)
+}

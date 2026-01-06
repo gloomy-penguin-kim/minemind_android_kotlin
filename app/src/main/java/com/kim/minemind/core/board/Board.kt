@@ -2,8 +2,10 @@ package com.kim.minemind.core.board
 
 import android.util.Log
 import com.kim.minemind.core.Action
+import com.kim.minemind.core.board.RNG
 import com.kim.minemind.core.history.ChangeSet
 import com.kim.minemind.core.history.HistoryEntry
+import com.kim.minemind.shared.BoardSnapshot
 import com.kim.minemind.shared.ConflictDelta
 
 class Board(
@@ -20,8 +22,6 @@ class Board(
 
     var win: Boolean = false
         private set
-
-//    var cells: Array<Array<Cell>> = Array(rows) { Array(cols) { Cell(it, it) } }
 
     var cells: MutableList<Cell> = MutableList(rows * cols) {
         Cell(it / cols, it % cols, it)
@@ -338,5 +338,30 @@ class Board(
             }
         }
     }
+
+    fun restore(s: BoardSnapshot) {
+        require(rows == s.rows && cols == s.cols && mines == s.mines && seed == s.seed)
+
+        minesPlaced = s.minesPlaced
+        gameOver = s.gameOver
+        win = s.win
+        remainingSafe = s.remainingSafe
+
+        // rebuild cells list (or mutate existing)
+        cells = s.cells
+            .sortedBy { it.gid }
+            .map { cs ->
+                val (r, c) = cs.gid / cols to cs.gid % cols
+                Cell(r, c, cs.gid).also { cell ->
+                    cell.isMine = cs.isMine
+                    cell.isRevealed = cs.isRevealed
+                    cell.isFlagged = cs.isFlagged
+                    cell.isExploded = cs.isExploded
+                    cell.adjacentMines = cs.adjacentMines
+                }
+            }
+            .toMutableList()
+    }
+
 
 }

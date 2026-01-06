@@ -1,7 +1,6 @@
 package com.kim.minemind.analysis.rules
 
 import com.kim.minemind.analysis.frontier.Component
-import com.kim.minemind.analysis.rules.RuleAggregator
 import com.kim.minemind.core.board.Board
 
 
@@ -24,10 +23,10 @@ class RuleEngine () {
         return RuleResult(
             forcedFlags=moves.forcedFlags,
             forcedOpens=moves.forcedOpens,
-            ruleActionByGid=moves.ruleActionByGid,
+            ruleActionByGid=moves.actionByGid,
 
             conflictList = moves.getConflicts(),
-            ruleList = moves.getMoves()
+            ruleList = moves.getRules()
         )
     }
 }

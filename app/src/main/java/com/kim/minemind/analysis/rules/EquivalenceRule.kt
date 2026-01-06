@@ -1,10 +1,6 @@
 package com.kim.minemind.analysis.rules
 
 import com.kim.minemind.analysis.frontier.Component
-import com.kim.minemind.shared.Move
-import com.kim.minemind.analysis.rules.RuleAggregator
-import com.kim.minemind.core.Action
-import com.kim.minemind.core.MoveKind
 import com.kim.minemind.shared.ReasonList
 import java.util.BitSet
 
@@ -21,14 +17,16 @@ fun equivalenceRule(
     fun difference(b: BitSet, a: BitSet): BitSet =
         (b.clone() as BitSet).apply { andNot(a) }
 
-    fun enqueueMovesForMask(mask: BitSet, action: Action, reasonList: ReasonList) {
+    fun enqueueMovesForMask(mask: BitSet, ruleType: RuleType, reasonList: ReasonList) {
         var bit = mask.nextSetBit(0)
         while (bit >= 0) {
             val gid = comp.localToGlobal[bit]
-            moves.addMove(
+            moves.addRule(
                 (mask.clone() as BitSet),
                 comp.localToGlobal,
-                Move(gid, action, MoveKind.RULE, reasonList)
+                Rule(gid=gid,
+                    type=ruleType,
+                    reasons=reasonList)
             )
             if (stopAfterOne && moves.isNotEmpty()) return
             bit = mask.nextSetBit(bit + 1)
@@ -68,7 +66,7 @@ fun equivalenceRule(
                 if (!diff.isEmpty) {
                     enqueueMovesForMask(
                         (diff.clone() as BitSet),
-                        Action.OPEN,
+                        RuleType.SAFE,
                         ReasonList(initReasons = listOf(
                             "Equivalence: A⊂B and rem(A)==rem(B) -> B\\A SAFE",
 //                            "A=$a rem=$remA subset of",
@@ -84,7 +82,7 @@ fun equivalenceRule(
                 if (!diff.isEmpty) {
                     enqueueMovesForMask(
                         (diff.clone() as BitSet),
-                        Action.OPEN,
+                        RuleType.SAFE,
                         ReasonList(initReasons=listOf(
                             "Equivalence: B⊂A and rem(A)==rem(B) -> A\\B SAFE",
 //                            "B=$b rem=$remB subset of",
