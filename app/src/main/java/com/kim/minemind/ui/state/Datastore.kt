@@ -1,4 +1,4 @@
-package com.kim.minemind.ui.settings
+package com.kim.minemind.ui.state
 
 
 import android.content.Context

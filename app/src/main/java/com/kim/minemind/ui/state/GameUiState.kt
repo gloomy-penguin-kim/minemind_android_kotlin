@@ -29,6 +29,14 @@ data class GameUiState(
 )
 
 
+//fun GameUiState.resetOverlay(): GameUiState {
+//    return this.copy(
+//        overlay = AnalyzerOverlay(),
+//        ruleList = emptyMap(),
+//        conflictBoard = ConflictList(),
+//
+//    return this
+//}
 
 
 

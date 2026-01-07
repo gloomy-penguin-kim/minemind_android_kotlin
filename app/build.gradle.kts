@@ -3,7 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 
-
+    kotlin("plugin.serialization") version "1.9.23"
 }
 
 android {
@@ -45,6 +45,7 @@ dependencies {
     implementation("androidx.compose.foundation:foundation:1.10.0")
     implementation("androidx.compose.ui:ui-unit:1.10.0")
     implementation("androidx.compose.animation:animation:1.10.0")
+    implementation("androidx.datastore:datastore-core:1.2.0")
     val composeBom = platform("androidx.compose:compose-bom:2024.09.02")
     implementation(composeBom)
 
@@ -63,5 +64,8 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlin:kotlin-test:1.9.0")
+
+    implementation("androidx.datastore:datastore-preferences:1.1.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 
 }

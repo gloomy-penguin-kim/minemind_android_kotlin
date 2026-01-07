@@ -3,20 +3,50 @@ package com.kim.minemind.ui.state
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 
-class GameStateRepository(private val ds: DataStore<Preferences>) {
-    private val KEY = stringPreferencesKey("game_snapshot")
+// GameStateRepository.kt
+import kotlinx.coroutines.flow.first
 
-    val snapshotFlow: Flow<String?> = ds.data.map { it[KEY] }
+class GameStateRepository(
+    private val dataStore: DataStore<Preferences>
+) {
+    companion object {
+        private val SNAPSHOT = stringPreferencesKey("game_snapshot")
+    }
+
+    val snapshotFlow: Flow<String?> =
+        dataStore.data.map { it[SNAPSHOT] }
 
     suspend fun save(json: String) {
-        ds.edit { it[KEY] = json }
+        dataStore.edit { prefs ->
+            prefs[SNAPSHOT] = json
+        }
     }
 
-    suspend fun clear() {
-        ds.edit { it.remove(KEY) }
+//    Even better: be defensive with IO errors
+//    DataStore can throw IOException (corruption, disk issues).
+//    The recommended pattern is:
+    suspend fun load(): String? {
+        return dataStore.data
+            .catch { emit(emptyPreferences()) }
+            .first()[SNAPSHOT]
     }
+
+//    suspend fun remove() {
+//        dataStore.edit { prefs ->
+//            prefs.remove(SNAPSHOT)
+//        }
+//    }
+
+    suspend fun clear() {
+        dataStore.edit { prefs ->
+            prefs.remove(SNAPSHOT)
+        }
+    }
+
 }

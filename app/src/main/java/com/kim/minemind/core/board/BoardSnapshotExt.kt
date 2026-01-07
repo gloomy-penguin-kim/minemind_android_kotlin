@@ -1,7 +1,7 @@
 package com.kim.minemind.core.board
 
-import com.kim.minemind.shared.BoardSnapshot
-import com.kim.minemind.shared.CellSnapshot
+import com.kim.minemind.shared.snapshot.BoardSnapshot
+import com.kim.minemind.shared.snapshot.CellSnapshot
 
 fun Board.toSnapshot(): BoardSnapshot =
     BoardSnapshot(

@@ -1,10 +1,9 @@
-package com.kim.minemind.shared
+package com.kim.minemind.shared.snapshot
+
 import com.kim.minemind.core.Action
 import com.kim.minemind.core.history.ChangeSetSnapshot
-import com.kim.minemind.core.history.HistoryEvent
 import com.kim.minemind.core.history.HistoryEventSnapshot
 import kotlinx.serialization.Serializable
-
 
 @Serializable
 data class GameSnapshot(
@@ -61,13 +60,14 @@ data class MoveSnapshot(
 data class ChangeSetSnapshot(
     val revealed: List<Int> = emptyList(),
     val flagged: List<Int> = emptyList(),
-    val probabilities: Map<Int, Float?> = emptyMap(),
+    val exploded: List<Int> = emptyList(),
     val gameOver: Boolean = false,
     val win: Boolean = false,
 )
-
-private fun HistoryEvent.toEvent(): HistoryEvent {
-    HIstoryEvent(
-        event = event.toSnapshot(),
-    )
-}
+//
+//
+//private fun HistoryEvent.toEvent(): HistoryEvent {
+//    HistoryEvent(
+//        event = event.toSnapshot(),
+//    )
+//} b

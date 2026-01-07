@@ -2,11 +2,13 @@ package com.kim.minemind.core.board
 
 import android.util.Log
 import com.kim.minemind.core.Action
-import com.kim.minemind.core.board.RNG
 import com.kim.minemind.core.history.ChangeSet
 import com.kim.minemind.core.history.HistoryEntry
-import com.kim.minemind.shared.BoardSnapshot
+import com.kim.minemind.core.board.toSnapshot
+import com.kim.minemind.core.board.restoreFromSnapshot
 import com.kim.minemind.shared.ConflictDelta
+
+
 
 class Board(
     val rows: Int,
@@ -61,7 +63,7 @@ class Board(
             Action.OPEN -> revealCell(gid)
             Action.FLAG -> toggleFlag(gid, flagValue)
             Action.CHORD -> chord(gid)
-            Action.INVALID -> ChangeSet()
+            else -> return ChangeSet()
         }
         remainingSafe -= csDelta.revealed.size
         Log.d(TAG, "remainingSafe = $remainingSafe")

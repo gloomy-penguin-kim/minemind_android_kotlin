@@ -1,6 +1,7 @@
 package com.kim.minemind.core.history
 
 import com.kim.minemind.shared.HistorySnapshot
+import com.kim.minemind.shared.snapshot.HistorySnapshot
 
 class HistoryStack {
     private val stack = ArrayDeque<HistoryEntry>()
@@ -17,11 +18,4 @@ class HistoryStack {
     }
 }
 
-fun HistoryStack.toSnapshot(): HistorySnapshot =
-    HistorySnapshot(
-        entries = toList().map { it.toSnapshot() }
-    )
 
-fun HistoryStack.restore(s: HistorySnapshot) {
-    restoreFromList(s.entries.map { it.toHistoryEntry() })
-}

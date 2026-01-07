@@ -1,7 +1,6 @@
 package com.kim.minemind.ui.state
 
 import androidx.lifecycle.ViewModel
-import com.kim.minemind.analysis.AnalysisConfig
 import com.kim.minemind.analysis.Analyzer
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,24 +15,33 @@ import com.kim.minemind.core.history.HistoryStack
 
 import android.util.Log
 import androidx.lifecycle.viewModelScope
+import com.kim.minemind.core.history.toSnapshot
+import com.kim.minemind.core.board.toSnapshot
 import com.kim.minemind.core.history.HistoryEvent
+import com.kim.minemind.core.history.restore
 import com.kim.minemind.shared.ConflictDelta
 import com.kim.minemind.shared.ConflictList
+import com.kim.minemind.shared.snapshot.GameSnapshot
 import com.kim.minemind.ui.settings.GlyphMode
 import com.kim.minemind.ui.settings.VisualResolver
 import com.kim.minemind.ui.settings.VisualState
 import com.kim.minemind.ui.settings.VisualSettings
 import com.kim.minemind.ui.settings.VisualSettingsRepository
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.Random
 
+import kotlinx.serialization.json.Json
+
+
 class GameViewModel(
     private val settingsRepo: VisualSettingsRepository,
     private val visualResolver: VisualResolver,
-    private val savedStateRepo: GameStateRepository
+    private val gameStateRepo: GameStateRepository
 ) : ViewModel(
 ) {
 
@@ -53,7 +61,20 @@ class GameViewModel(
         private const val KEY_GAME_SNAPSHOT = "game_snapshot" // whatever you store
         private const val TAG = "ui.GameViewModel"
     }
+    private val json = Json {
+        encodeDefaults = true
+        ignoreUnknownKeys = true
+    }
 
+    private fun buildSnapshot(): GameSnapshot =
+        GameSnapshot(
+            board = board.toSnapshot(),
+            history = history.toSnapshot()
+        )
+    //    Save after truth changes
+    //    dispatch()
+    //    undo()
+    //    newGame()
 
     val visualSettings: StateFlow<VisualSettings> =
         settingsRepo.settingsFlow
@@ -84,18 +105,46 @@ class GameViewModel(
 
 
     init {
-        newGame(rows=25, cols= 25, mines=150)
-        val snapshot = savedStateRepo.get<String>(KEY_GAME_SNAPSHOT)
-        if (snapshot != null) {
-            // restoreGame(snapshot)
-        } else {
-            // startNewGame()
+        newGame(rows=25, cols=25, mines=150)
+        viewModelScope.launch {
+            val encoded = gameStateRepo.snapshotFlow.first()
+            if (encoded.isNullOrBlank()) {
+                newGame(rows = 25, cols = 25, mines = 150)
+                return@launch
+            }
+            runCatching {
+                val snap =  json.decodeFromString(GameSnapshot.serializer(), encoded)
+                restoreFromSnapshot(snap)
+            }.onFailure {
+                newGame(rows = 25, cols = 25, mines = 150)
+            }
         }
     }
 
-    private fun persist(snapshot: String) {
-        savedStateHandle[KEY_GAME_SNAPSHOT] = snapshot
+    private fun restoreFromSnapshot(snap: GameSnapshot) {
+        board = Board(
+            rows = snap.board.rows,
+            cols = snap.board.cols,
+            mines = snap.board.mines,
+            seed = snap.board.seed
+        )
     }
+
+    private fun persist(encoded: String) {
+        viewModelScope.launch {
+            gameStateRepo.save(encoded)
+        }
+    }
+
+    private fun persistSnapshot() {
+        val snap = buildSnapshot()
+        val encoded = json.encodeToString(GameSnapshot.serializer(), snap)
+
+        viewModelScope.launch {
+            gameStateRepo.save(encoded)
+        }
+    }
+
     fun newGame(rows: Int, cols: Int, mines: Int) {
         solver.clear()
         analyzer.clear()
@@ -437,3 +486,4 @@ class GameViewModel(
 
 
 }
+

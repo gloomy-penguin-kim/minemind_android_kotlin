@@ -1,7 +1,6 @@
 package com.kim.minemind.core.history
 
 import com.kim.minemind.core.Action
-import com.kim.minemind.shared.HistoryEntrySnapshot
 
 sealed class HistoryEvent {
     data class UserCommand(val action: Action, val gid: Int, val flagValue: Boolean? = null) : HistoryEvent()

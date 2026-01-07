@@ -1,6 +1,6 @@
 package com.kim.minemind.core.history
 
-import com.kim.minemind.shared.HistoryEntrySnapshot
+import com.kim.minemind.shared.snapshot.HistoryEntrySnapshot
 
 
 data class HistoryEntry(

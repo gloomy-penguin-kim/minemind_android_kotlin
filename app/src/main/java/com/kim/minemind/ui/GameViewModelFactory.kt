@@ -10,13 +10,13 @@ import com.kim.minemind.ui.state.GameViewModel
 class GameViewModelFactory(
     private val settingsRepo: VisualSettingsRepository,
     private val visualResolver: VisualResolver,
-    private val savedStateRepo: GameStateRepository
+    private val gameStateRepo: GameStateRepository
 ) : ViewModelProvider.Factory {
 
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(GameViewModel::class.java)) {
-            return GameViewModel(settingsRepo, visualResolver, savedStateRepo) as T
+            return GameViewModel(settingsRepo, visualResolver, gameStateRepo) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class: $modelClass")
     }
