@@ -39,6 +39,10 @@ android {
     buildFeatures {
         compose = true
     }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 dependencies {
@@ -46,6 +50,9 @@ dependencies {
     implementation("androidx.compose.ui:ui-unit:1.10.0")
     implementation("androidx.compose.animation:animation:1.10.0")
     implementation("androidx.datastore:datastore-core:1.2.0")
+    implementation("androidx.privacysandbox.tools:tools-core:1.0.0-alpha14")
+    implementation("androidx.compose.animation:animation-core:1.10.0")
+    implementation("androidx.compose.runtime:runtime:1.10.0")
     val composeBom = platform("androidx.compose:compose-bom:2024.09.02")
     implementation(composeBom)
 

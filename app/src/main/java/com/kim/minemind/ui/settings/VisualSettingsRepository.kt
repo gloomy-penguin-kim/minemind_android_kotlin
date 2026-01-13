@@ -4,6 +4,8 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -20,6 +22,10 @@ class VisualSettingsRepository(
         private val COLOR_SET = stringPreferencesKey("color_set")
         private val SHUFFLE_GLYPHS = booleanPreferencesKey("shuffle_glyphs")
         private val SHUFFLE_COLORS = booleanPreferencesKey("shuffle_colors")
+        private val FONT_SIZE = floatPreferencesKey("font_size")
+        private val GLYPH_SIZE = intPreferencesKey("glyph_size")
+
+
     }
 
     val settingsFlow: Flow<VisualSettings> =
@@ -29,9 +35,11 @@ class VisualSettingsRepository(
                     ?: GlyphMode.NUMERALS,
                 numeralSetId = prefs[NUMERAL_SET] ?: "latin_digits",
                 alphaSetId = prefs[ALPHA_SET] ?: "latin_letters",
-                colorSetId = prefs[COLOR_SET] ?: "classic_dots",
+                colorSetId =  prefs[COLOR_SET] ?: "classic",
                 shuffleGlyphs = prefs[SHUFFLE_GLYPHS] ?: false,
                 shuffleColors = prefs[SHUFFLE_COLORS] ?: false,
+                fontSize = prefs[FONT_SIZE] ?: 24f,
+                glyphSize = prefs[GLYPH_SIZE] ?: 16,
             )
         }
 
@@ -43,6 +51,8 @@ class VisualSettingsRepository(
             prefs[COLOR_SET] = settings.colorSetId
             prefs[SHUFFLE_GLYPHS] = settings.shuffleGlyphs
             prefs[SHUFFLE_COLORS] = settings.shuffleColors
+            prefs[FONT_SIZE] = settings.fontSize
+            prefs[GLYPH_SIZE] = settings.glyphSize
         }
     }
 }

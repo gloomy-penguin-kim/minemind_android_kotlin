@@ -14,30 +14,37 @@ import com.kim.minemind.core.history.HistoryEntry
 import com.kim.minemind.core.history.HistoryStack
 
 import android.util.Log
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.lifecycle.viewModelScope
+import com.kim.minemind.core.board.restoreFromSnapshot
 import com.kim.minemind.core.history.toSnapshot
 import com.kim.minemind.core.board.toSnapshot
 import com.kim.minemind.core.history.HistoryEvent
-import com.kim.minemind.core.history.restore
 import com.kim.minemind.shared.ConflictDelta
 import com.kim.minemind.shared.ConflictList
+import com.kim.minemind.shared.snapshot.BoardSnapshot
+import com.kim.minemind.shared.snapshot.CellSnapshot
 import com.kim.minemind.shared.snapshot.GameSnapshot
 import com.kim.minemind.ui.settings.GlyphMode
 import com.kim.minemind.ui.settings.VisualResolver
 import com.kim.minemind.ui.settings.VisualState
 import com.kim.minemind.ui.settings.VisualSettings
 import com.kim.minemind.ui.settings.VisualSettingsRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Random
 
 import kotlinx.serialization.json.Json
 
-
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 class GameViewModel(
     private val settingsRepo: VisualSettingsRepository,
     private val visualResolver: VisualResolver,
@@ -51,6 +58,9 @@ class GameViewModel(
     private val history = HistoryStack()
     private val _uiState = MutableStateFlow(GameUiState())
     val uiState: StateFlow<GameUiState> = _uiState
+
+    val cells = mutableStateListOf<CellUI>()
+
 
 //    private fun idx(r: Int, c: Int, cols: Int) = r * cols + c
 
@@ -75,6 +85,12 @@ class GameViewModel(
     //    dispatch()
     //    undo()
     //    newGame()
+
+    fun updateVisualSettings(newSettings: VisualSettings) {
+        viewModelScope.launch {
+            settingsRepo.set(newSettings)
+        }
+    }
 
     val visualSettings: StateFlow<VisualSettings> =
         settingsRepo.settingsFlow
@@ -113,7 +129,7 @@ class GameViewModel(
                 return@launch
             }
             runCatching {
-                val snap =  json.decodeFromString(GameSnapshot.serializer(), encoded)
+                val snap = json.decodeFromString(GameSnapshot.serializer(), encoded)
                 restoreFromSnapshot(snap)
             }.onFailure {
                 newGame(rows = 25, cols = 25, mines = 150)
@@ -128,6 +144,7 @@ class GameViewModel(
             mines = snap.board.mines,
             seed = snap.board.seed
         )
+        board.restoreFromSnapshot(snap.board)
     }
 
     private fun persist(encoded: String) {
@@ -146,16 +163,20 @@ class GameViewModel(
     }
 
     fun newGame(rows: Int, cols: Int, mines: Int) {
+        cells.clear()
+
         solver.clear()
         analyzer.clear()
         history.clear()
         board = Board(rows, cols, mines, seed = 0)
+
+        cells.addAll(buildCells(board, analyzer.analyze(board)))
         _uiState.value = GameUiState(
             rows = rows,
             cols = cols,
             mines = mines,
             moves = 0,
-            cells = buildCells(board, analyzer.analyze(board))
+            cells = cells
         )
     }
     fun handleTopMenu(action: TopMenuAction) {
@@ -168,7 +189,89 @@ class GameViewModel(
         _uiState.update { it.copy(tapMode = m) }
     }
 
+    private var overlayJob: Job? = null
+
     fun dispatch(action: Action?, gid: Int) {
+        if (action == null || board.gameOver) return
+
+        val ui = _uiState.value
+        val beforeMoves = ui.moves
+        val beforeRemainingSafe = board.remainingSafe
+
+        // 1. Apply truth update (fast)
+        val cs = board.apply(action, gid)
+        if (cs.empty) return
+
+        // Record in history (cheap)
+        history.push(
+            HistoryEntry(
+                event = HistoryEvent.UserCommand(action, gid),
+                changes = cs,
+                moveCountBefore = beforeMoves,
+                remainingSafeBefore = beforeRemainingSafe
+            )
+        )
+
+        // 2. Update the UI immediately, *without* solver
+        // This makes the click feel instant
+        patchCells(
+            cs = cs,
+            board = board,
+            overlay = AnalyzerOverlay()
+        )
+        _uiState.update { s ->
+            s.copy(
+                moves = beforeMoves + 1,
+                gameOver = cs.gameOver,
+                win = cs.win,
+                cells = cells
+            )
+        }
+
+        // If not in enumeration mode, nothing more to compute
+        if (!ui.isEnumerate || cs.gameOver) {
+            persistSnapshot()
+            return
+        }
+
+        // 3. Cancel previous job (if user clicks fast)
+        overlayJob?.cancel()
+
+        // 4. Launch solver + conflicts async
+        overlayJob = viewModelScope.launch(Dispatchers.Default) {
+
+            // This is the expensive work:
+            val overlay = analyzer.analyze(board)
+            val conflictDelta = board.conflictsByGid(cs.getAllGid())
+            val conflictBoard = ui.conflictBoard.applyDelta(conflictDelta)
+
+            // Switch back to main thread for UI update
+            withContext(Dispatchers.Main) {
+                val latest = _uiState.value
+                patchCells(
+                    cs = cs,
+                    board = board,
+                    overlay = overlay,
+                    conflictsBoard = conflictBoard,
+                    clearConflicts = conflictDelta.removes
+                )
+                _uiState.update { s ->
+                    s.copy(
+                        cells = cells,
+                        overlay = overlay,
+                        ruleList = overlay.ruleList,
+                        conflictBoard = conflictBoard,
+                        conflictProbs = overlay.conflictProbs,
+                    )
+                }
+
+                persistSnapshot()
+            }
+        }
+    }
+
+
+    fun dispatch2(action: Action?, gid: Int) {
         if (action == null) return
         val beforeMoves = _uiState.value.moves
         val beforeRemainingSafe = board.remainingSafe
@@ -185,29 +288,42 @@ class GameViewModel(
             )
         )
 
-        // TODO:  maybe separate out probs and rules so maybe they can be ran concurrently..?
+        // TODO:  maybe separate out prob and rules so maybe they can be ran concurrently..?
 
         val overlay = if (!board.gameOver and _uiState.value.isEnumerate) analyzer.analyze(board) else AnalyzerOverlay()
         val conflictDelta: ConflictDelta = if (!board.gameOver and _uiState.value.isEnumerate) board.conflictsByGid(cs.getAllGid()) else ConflictDelta()
         val conflictBoard = _uiState.value.conflictBoard.applyDelta(conflictDelta)
 
+//        viewModelScope.launch(Dispatchers.Default) {
+//            val overlay = analyzer.analyze(board)
+//            val conflictDelta = board.conflictsByGid(cs.getAllGid())
+//
+//            withContext(Dispatchers.Main) {
+//                applyOverlayToUi(overlay, conflictDelta)
+//            }
+//        }
+
+
+
         Log.d(TAG, "overlay = $overlay")
         Log.d(TAG, "overlay.conflictProbs = ${overlay.conflictProbs}")
         Log.d(TAG, "conflictBoard = ${conflictBoard}")
+
+        patchCells(
+            cs = cs,
+            board = board,
+            overlay = overlay,
+            conflictsBoard = conflictBoard,
+            clearConflicts = conflictDelta.removes
+        )
+        Log.d(TAG, "cells = ${cells}")
 
         _uiState.update { s ->
             s.copy(
                 moves = beforeMoves + 1,
                 gameOver = cs.gameOver,
                 win = cs.win,
-                cells = patchCells(
-                    base = s.cells,
-                    cs = cs,
-                    board = board,
-                    overlay = overlay,
-                    conflictsBoard = conflictBoard,
-                    clearConflicts = conflictDelta.removes
-                ),
+                cells = cells,
                 overlay = overlay,
                 ruleList = overlay.ruleList,
                 conflictBoard = conflictBoard,
@@ -216,59 +332,55 @@ class GameViewModel(
         }
     }
 
-
     private fun patchCells(
-        base: List<CellUI>,
         cs: ChangeSet,
         board: Board,
         overlay: AnalyzerOverlay,
         conflictsBoard: ConflictList = ConflictList(),
         clearConflicts: Set<Int> = emptySet()
-    ): List<CellUI> {
-        val updated = base.toMutableList()
-
+    )  {
+        // 1. Build the set of changed gids (same as before)
         val changed = HashSet<Int>().apply {
             addAll(cs.revealed)
             addAll(cs.flagged)
             addAll(cs.exploded)
 
-            addAll(conflictsBoard.keys)
-
-            addAll(overlay.conflictProbs.keys)
-            addAll(overlay.forcedOpens)
             addAll(overlay.forcedFlags)
+            addAll(overlay.forcedOpens)
             addAll(overlay.probabilities.keys)
+            addAll(overlay.conflictProbs.keys)
 
+            addAll(conflictsBoard.keys)
             addAll(clearConflicts)
         }
 
+        // 2. Update only the changed cells
         for (gid in changed) {
             val bc = board.cells[gid]
 
-            updated[gid] = CellUI(
+            cells[gid] = CellUI(
                 gid = gid,
 
                 isMine = bc.isMine,
                 isRevealed = bc.isRevealed,
                 isFlagged = bc.isFlagged,
                 isExploded = bc.isExploded,
+                isExplodedGid = bc.isExplodedGid,
+
                 adjacentMines = bc.adjacentMines,
 
-                conflict = (gid in overlay.conflictProbs.keys) or (gid in conflictsBoard.keys),
+                conflict = (gid in overlay.conflictProbs.keys) ||
+                            (gid in conflictsBoard.keys),
 
-                probability = overlay.probabilities.get(gid),
+                probability = overlay.probabilities[gid],
 
-                forcedOpen = gid in (overlay.forcedOpens),
-                forcedFlag = gid in (overlay.forcedFlags)
+                forcedOpen = gid in overlay.forcedOpens,
+                forcedFlag = gid in overlay.forcedFlags
             )
         }
-
-        return updated
     }
 
-    // autoBuildCells(totalMove
-    // s, board, overlay, csOpen, _uiState.value.conflictDelta, _uiState.value.conflictBoard)
-    // TODO: make it so autobot doesn't make a wrong move ever
+
     private fun autoBuildCells(
         totalMoves: Int,
         board: Board,
@@ -277,19 +389,21 @@ class GameViewModel(
         conflictDelta: ConflictDelta,
         conflictBoard: ConflictList
     ) {
+        patchCells(
+            cs = cs,
+            board = board,
+            overlay = overlay,
+            conflictsBoard = conflictBoard,
+            clearConflicts = conflictDelta.removes
+        )
+        Log.d(TAG, "cells = ${cells}")
+
         _uiState.update { s ->
             s.copy(
                 moves = totalMoves,
                 gameOver = cs.gameOver,
                 win = cs.win,
-                cells = patchCells(
-                    base = s.cells,
-                    cs = cs,
-                    board = board,
-                    overlay = overlay,
-                    conflictsBoard = conflictBoard,
-                    clearConflicts = conflictDelta.removes
-                ),
+                cells = cells,
                 overlay = overlay,
                 ruleList = overlay.ruleList,
                 conflictBoard = conflictBoard,
@@ -316,13 +430,6 @@ class GameViewModel(
             Log.d(TAG, "overlay is $overlay")
             prevTotalMoves = totalMoves
             for (ruleAction in overlay.ruleActions) {
-                // this actually does check the board for mines because I don't want autobot to blow
-                // up anyones game.  i can stop the autobot before/when it hits a mine and just stop there
-                // and say it cannot continue but skipping the area (conflict area) seems okay because
-                // even if there weren't conflicts beforehand it seems that now there are always a lot after
-                // if flags are incorrectly placed
-                // the autobot currently stops when no more RULES can be applied, it does not use the
-                // probability data, even if it is a sure thing.  this is a change since the python code
                 if ((ruleAction.value == Action.OPEN) and board.isMine(ruleAction.key)) continue
                 if ((ruleAction.value == Action.FLAG) and !board.isMine(ruleAction.key)) continue
 
@@ -351,20 +458,19 @@ class GameViewModel(
 
             val conflictDelta =  board.conflictsByGid(totalChanges.getAllGid())
             val conflictBoard = _uiState.value.conflictBoard.applyDelta(conflictDelta)
-
+            patchCells(
+                cs = totalChanges,
+                board = board,
+                overlay = overlay,
+                conflictsBoard = conflictBoard,
+                clearConflicts = conflictDelta.removes
+            )
             _uiState.update { s ->
                 s.copy(
                     moves = beforeMoves + totalMoves,
                     gameOver = totalChanges.gameOver,
                     win = totalChanges.win,
-                    cells = patchCells(
-                        base = s.cells,
-                        cs = totalChanges,
-                        board = board,
-                        overlay = overlay,
-                        conflictsBoard = conflictBoard,
-                        clearConflicts = conflictDelta.removes
-                    ),
+                    cells = cells,
                     overlay = overlay,
                     ruleList = overlay.ruleList,
                     conflictBoard = conflictBoard,
@@ -386,78 +492,140 @@ class GameViewModel(
     }
 
     fun enumerate() {
-        val e = _uiState.value.isEnumerate
-        if (!e) {
+        val current = _uiState.value
+        val enabled = current.isEnumerate
+
+        // -------------------------
+        // 1. Disabling enumerate
+        // -------------------------
+        if (enabled) {
+            _uiState.update { it.copy(isEnumerate = false) }
+            persistSnapshot()
+            return
+        }
+
+        // -------------------------
+        // 2. Enabling enumerate
+        // -------------------------
+        _uiState.update { it.copy(isEnumerate = true) }
+
+        // Cancel any pending background solver
+        overlayJob?.cancel()
+
+        // Run analyzer on background thread
+        overlayJob = viewModelScope.launch(Dispatchers.Default) {
             val overlay = analyzer.analyze(board)
 
-            val n = (0..((board.rows * board.cols)-1)).toSet()
-            val conflictBoard: ConflictDelta = board.conflictsByGid(n)
+            // Build a fresh conflictBoard for ALL cells
+            val conflictDelta = board.conflictsByGid(
+                (0 until board.rows * board.cols).toSet()
+            )
+            val conflictBoard = conflictDelta.upserts
 
-            _uiState.update { s ->
-                s.copy(
-                    cells = patchCells(
-                        base = s.cells,
-                        cs = ChangeSet(),
-                        board = board,
-                        overlay = overlay
-                    ),
-                    isEnumerate = true,
+            withContext(Dispatchers.Main) {
 
+                // Incrementally update cells from overlay & conflict
+                patchCells(
+                    cs = ChangeSet(),      // no truth changes
+                    board = board,
                     overlay = overlay,
-                    ruleList = overlay.ruleList,
-                    conflictBoard = conflictBoard.upserts,
-                    conflictProbs = overlay.conflictProbs
+                    conflictsBoard = conflictBoard
                 )
+
+                // Update the rest of the UI state
+                _uiState.update { s ->
+                    s.copy(
+                        overlay = overlay,
+                        ruleList = overlay.ruleList,
+                        conflictBoard = conflictBoard,
+                        conflictProbs = overlay.conflictProbs
+                    )
+                }
+
+                persistSnapshot()
             }
-        }
-        else {
-            _uiState.update { s -> s.copy( isEnumerate = false)}
         }
     }
 
+
     fun undo() {
         val entry = history.pop() ?: return
+        board.undo(entry)   // restore truth only
 
-        board.undo(entry) // revert truth only
+        // 1. Cancel solver job if active
+        overlayJob?.cancel()
 
-        var overlay = AnalyzerOverlay()
-        var conflictDelta = ConflictDelta()
-
-        if (_uiState.value.isEnumerate) {
-            overlay = analyzer.analyze(board)
-            val n = (0..<(board.rows * board.cols)).toSet()
-            conflictDelta = board.conflictsByGid(n)
-        }
-
-
+        // 2. Remove overlay immediately while recomputing
         _uiState.update { s ->
             s.copy(
                 moves = entry.moveCountBefore,
                 gameOver = false,
-                win = false,
-                cells = buildCells(
-                    b = board,
-                    overlay = overlay,
-                    conflictBoard = conflictDelta.upserts
-                ),
-                overlay = overlay,
-                ruleList = overlay.ruleList,
-                conflictBoard = conflictDelta.upserts,
-                conflictProbs = overlay.conflictProbs
+                win = false
             )
         }
+
+        // 3. Launch background solver + conflicts
+        overlayJob = viewModelScope.launch(Dispatchers.Default) {
+
+            // Recompute overlay only if enumerate mode is ON
+            val overlay = if (_uiState.value.isEnumerate)
+                analyzer.analyze(board)
+            else AnalyzerOverlay()
+
+            // Recompute conflicts (truth changed)
+            val conflictDelta =
+                if (_uiState.value.isEnumerate)
+                    board.conflictsByGid((0 until board.rows * board.cols).toSet())
+                else ConflictDelta()
+
+            val conflictBoard = conflictDelta.upserts
+
+            withContext(Dispatchers.Main) {
+
+                // 4. Incrementally update only changed truth cells
+                patchCells(
+                    cs = entry.changes,      // the reverse of what was applied originally
+                    board = board,
+                    overlay = overlay,
+                    conflictsBoard = conflictBoard,
+                    clearConflicts = conflictDelta.removes
+                )
+
+                // 5. Update UI state metadata
+                _uiState.update { s ->
+                    s.copy(
+                        overlay = overlay,
+                        ruleList = overlay.ruleList,
+                        conflictBoard = conflictBoard,
+                        conflictProbs = overlay.conflictProbs
+                    )
+                }
+
+                persistSnapshot()
+            }
+        }
     }
+
 
     private fun buildCells(
         b: Board,
         overlay: AnalyzerOverlay = AnalyzerOverlay(),
-        conflictBoard: ConflictList = ConflictList(),
-        clearConflicts: Set<Int> = emptySet()
-    ): List<CellUI> {
-        val out = ArrayList<CellUI>(b.rows * b.cols)
-        for (gid in 0 until (b.rows * b.cols)) {
+        conflictBoard: ConflictList = ConflictList()
+    ): SnapshotStateList<CellUI> {
+
+        val cells = mutableStateListOf<CellUI>()
+//        cells.ensureCapacity(b.rows * b.cols)
+
+        val conflictKeys = conflictBoard.keys
+        val probKeys = overlay.probabilities.keys
+        val forcedOpen = overlay.forcedOpens
+        val forcedFlag = overlay.forcedFlags
+        val overlayConflicts = overlay.conflictProbs.keys
+
+        for (gid in 0 until b.rows * b.cols) {
             val bc = b.cells[gid]
-            out.add(
+
+            cells.add(
                 CellUI(
                     gid = gid,
 
@@ -465,22 +633,57 @@ class GameViewModel(
                     isRevealed = bc.isRevealed,
                     isFlagged = bc.isFlagged,
                     isExploded = bc.isExploded,
+                    isExplodedGid = bc.isExplodedGid,
+
                     adjacentMines = bc.adjacentMines,
 
-                    probability = overlay.probabilities.get(gid),
+                    probability = overlay.probabilities[gid],
 
-                    forcedOpen = gid in overlay.forcedOpens,
-                    forcedFlag = gid in overlay.forcedFlags,
+                    forcedOpen = gid in forcedOpen,
+                    forcedFlag = gid in forcedFlag,
 
-                    conflict = (gid in overlay.conflictProbs.keys) or (gid in conflictBoard.keys),
+                    conflict = (gid in overlayConflicts) || (gid in conflictKeys)
                 )
             )
         }
-        return out
+
+        return cells
     }
 
 
-    /////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//
+//    private fun buildCells(
+//        b: Board,
+//        overlay: AnalyzerOverlay = AnalyzerOverlay(),
+//        conflictBoard: ConflictList = ConflictList(),
+//        clearConflicts: Set<Int> = emptySet()
+//    ): List<CellUI> {
+//        val out = ArrayList<CellUI>(b.rows * b.cols)
+//        for (gid in 0 until (b.rows * b.cols)) {
+//            val bc = b.cells[gid]
+//            out.add(
+//                CellUI(
+//                    gid = gid,
+//
+//                    isMine = bc.isMine,
+//                    isRevealed = bc.isRevealed,
+//                    isFlagged = bc.isFlagged,
+//                    isExploded = bc.isExploded,
+//                    adjacentMines = bc.adjacentMines,
+//
+//                    probability = overlay.probabilities.get(gid),
+//
+//                    forcedOpen = gid in overlay.forcedOpens,
+//                    forcedFlag = gid in overlay.forcedFlags,
+//
+//                    conflict = (gid in overlay.conflictProbs.keys) or (gid in conflictBoard.keys),
+//                )
+//            )
+//        }
+//        return out
+//    }
+
 
 
 

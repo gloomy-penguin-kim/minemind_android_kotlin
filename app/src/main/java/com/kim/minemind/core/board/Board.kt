@@ -4,24 +4,22 @@ import android.util.Log
 import com.kim.minemind.core.Action
 import com.kim.minemind.core.history.ChangeSet
 import com.kim.minemind.core.history.HistoryEntry
-import com.kim.minemind.core.board.toSnapshot
-import com.kim.minemind.core.board.restoreFromSnapshot
 import com.kim.minemind.shared.ConflictDelta
-
+import com.kim.minemind.shared.snapshot.BoardSnapshot
+import com.kim.minemind.shared.snapshot.CellSnapshot
 
 
 class Board(
     val rows: Int,
     val cols: Int,
     val mines: Int,
-    val seed: Int
+    val seed: Int,
 ) {
-    var minesPlaced: Boolean = false
-        private set
 
+    var minesPlaced: Boolean = false
+    private set
     var gameOver: Boolean = false
         private set
-
     var win: Boolean = false
         private set
 
@@ -31,8 +29,35 @@ class Board(
         private set
 
     var remainingSafe: Int = rows * cols - mines
+        private set
+    var explodedGid: Int = -1
+        private set
 
-
+    fun setMinesPlaced(minesPlaced: Boolean) {
+        this@Board.minesPlaced = minesPlaced
+    }
+    fun setGameOver(gameOver: Boolean) {
+        this@Board.gameOver = gameOver
+    }
+    fun setWin(win: Boolean) {
+        this@Board.win = win
+    }
+    fun setRemainingSafe(remainingSafe: Int) {
+        this@Board.remainingSafe = remainingSafe
+    }
+    fun setExplodedGid(explodedGid: Int) {
+        this@Board.explodedGid = explodedGid
+    }
+    fun setCells(cells: List<CellSnapshot>) {
+        for (cell in cells) {
+            this@Board.cells[cell.gid] = Cell(cell.gid / cols, cell.gid % cols, cell.gid)
+            this@Board.cells[cell.gid].isFlagged = cell.isFlagged
+            this@Board.cells[cell.gid].isMine = cell.isMine
+            this@Board.cells[cell.gid].isRevealed = cell.isRevealed
+            this@Board.cells[cell.gid].isExploded = cell.isExploded
+            this@Board.cells[cell.gid].adjacentMines = cell.adjacentMines
+        }
+    }
 
     companion object {
         private const val TAG = "core.board"
@@ -184,25 +209,23 @@ class Board(
     }
 
     private fun loseCondition(gid:Int): ChangeSet {
-        val revealed = mutableSetOf<Int>()
-
+        val exploded = mutableSetOf<Int>()
         for (cell in cells) {
             if (cell.isMine) {
-                cell.isRevealed = true
-                revealed.add(cell.gid)
+                cell.isExploded = true
+                exploded.add(cell.gid)
             }
         }
-        cells[gid].isExploded = true
-
+        cells[gid].isExplodedGid = true
         return ChangeSet(
-            revealed = revealed,
-            exploded = mutableSetOf(gid),
+            exploded = exploded,
             gameOver = true,
             win = false
         )
     }
 
     private fun checkWinCondition(): ChangeSet {
+        if (gameOver) return ChangeSet()
         val newlyFlagged = mutableSetOf<Int>()
 
         Log.d(TAG, "remainingSafe = $remainingSafe")
@@ -341,6 +364,7 @@ class Board(
         }
     }
 
+
     fun restore(s: BoardSnapshot) {
         require(rows == s.rows && cols == s.cols && mines == s.mines && seed == s.seed)
 
@@ -348,6 +372,7 @@ class Board(
         gameOver = s.gameOver
         win = s.win
         remainingSafe = s.remainingSafe
+        explodedGid = s.explodedGid
 
         // rebuild cells list (or mutate existing)
         cells = s.cells
@@ -364,6 +389,4 @@ class Board(
             }
             .toMutableList()
     }
-
-
 }

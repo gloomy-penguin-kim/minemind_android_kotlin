@@ -8,5 +8,5 @@ fun HistoryStack.toSnapshot(): HistorySnapshot =
     )
 
 fun HistoryStack.restore(s: HistorySnapshot) {
-    restoreFromList(s.entries.map { it.toHistoryEntry() })
+    restoreFromList(s.entries.map { it.toEntry() })
 }

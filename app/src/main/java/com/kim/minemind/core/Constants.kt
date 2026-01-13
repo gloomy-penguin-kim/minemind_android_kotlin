@@ -9,7 +9,9 @@ enum class CellType(val num: Int ) {
     SAFE(1)
 }
 
-enum class Action { OPEN, FLAG, CHORD, AUTO }
+enum class Action { OPEN, FLAG, CHORD, AUTO;
+
+    companion object }
 enum class MoveKind(val text: String) {
     USER("USER"),
     RULE("RULE"),

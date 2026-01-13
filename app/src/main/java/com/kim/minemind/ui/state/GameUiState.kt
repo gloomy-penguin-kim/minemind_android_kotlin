@@ -1,5 +1,7 @@
 package com.kim.minemind.ui.state
 
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import com.kim.minemind.analysis.AnalyzerOverlay
 import com.kim.minemind.analysis.rules.Rule
 import com.kim.minemind.core.TapMode
@@ -19,7 +21,9 @@ data class GameUiState(
     val gameOver: Boolean = false,
     val win: Boolean = false,
     val tapMode: TapMode = TapMode.OPEN,
-    val cells: List<CellUI> = emptyList(),
+//    val cells: List<CellUI> = emptyList(),
+    val cells: SnapshotStateList<CellUI> = mutableStateListOf(),
+
     val conflictBoard: ConflictList = ConflictList(),
     val conflictProbs: ConflictList = ConflictList(),
     val ruleList: Map<Int, Rule> = emptyMap(),

@@ -1,6 +1,5 @@
 package com.kim.minemind.core.history
 
-import com.kim.minemind.shared.HistorySnapshot
 import com.kim.minemind.shared.snapshot.HistorySnapshot
 
 class HistoryStack {

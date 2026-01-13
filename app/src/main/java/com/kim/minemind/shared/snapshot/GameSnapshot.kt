@@ -1,8 +1,12 @@
 package com.kim.minemind.shared.snapshot
 
 import com.kim.minemind.core.Action
+import com.kim.minemind.core.history.ChangeSet
 import com.kim.minemind.core.history.ChangeSetSnapshot
+import com.kim.minemind.core.history.HistoryEntrySnapshot
+import com.kim.minemind.core.history.HistoryEvent
 import com.kim.minemind.core.history.HistoryEventSnapshot
+import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -10,6 +14,16 @@ data class GameSnapshot(
     val board: BoardSnapshot,
     val history: HistorySnapshot
 )
+
+//@Serializable
+//data class ChangeSetSnapshot(
+//    val revealed: Set<Int> = emptySet(),
+//    val flagged: Set<Int> = emptySet(),
+//    val exploded: Set<Int> = emptySet(),
+//    val explodedGid: Int = -1,
+//    val gameOver: Boolean = false,
+//    val win: Boolean = false,
+//)
 
 @Serializable
 data class BoardSnapshot(
@@ -21,6 +35,7 @@ data class BoardSnapshot(
     val gameOver: Boolean,
     val win: Boolean,
     val remainingSafe: Int,
+    val explodedGid: Int,
     val cells: List<CellSnapshot>
 )
 
@@ -39,35 +54,68 @@ data class HistorySnapshot(
     val entries: List<HistoryEntrySnapshot>
 )
 
-@Serializable
-data class HistoryEntrySnapshot(
-    val event: HistoryEventSnapshot,
-    val changes: ChangeSetSnapshot,
-    val moveCountBefore: Int,
-    val remainingSafeBefore: Int
-)
 
 @Serializable
-data class MoveSnapshot(
-    // adjust to match your Move type; common fields:
-    val gid: Int,
-    val action: Action,
-    val kind: String, // "OPEN" / "FLAG" / "CHORD" etc
-    val flagValue: Boolean? = null
-)
+data class HistoryEventSnapshot(
+    val type: Type,
+    val action: String? = null,     // Action.name
+    val gid: Int? = null,
+    val flagValue: Boolean? = null,
+    val count: Int? = null,
+    val note: String? = null
+) {
+    @Serializable
+    enum class Type {
+        USER_COMMAND,
+        AUTO_STEP,
+        APPLY_RECOMMENDATIONS,
+        SYSTEM
+    }
+}
 
-@Serializable
-data class ChangeSetSnapshot(
-    val revealed: List<Int> = emptyList(),
-    val flagged: List<Int> = emptyList(),
-    val exploded: List<Int> = emptyList(),
-    val gameOver: Boolean = false,
-    val win: Boolean = false,
-)
-//
-//
-//private fun HistoryEvent.toEvent(): HistoryEvent {
-//    HistoryEvent(
-//        event = event.toSnapshot(),
-//    )
-//} b
+fun userCommandEvent(action: Action, gid: Int, flagValue: Boolean? = null) =
+    HistoryEventSnapshot(
+        type = HistoryEventSnapshot.Type.USER_COMMAND,
+        action = action.name,
+        gid = gid,
+        flagValue = flagValue
+    )
+
+fun autoStepEvent(note: String = "") =
+    HistoryEventSnapshot(
+        type = HistoryEventSnapshot.Type.AUTO_STEP,
+        note = note
+    )
+
+
+private fun ChangeSetSnapshot.toChangeSet(): ChangeSet {
+    return ChangeSet(
+        revealed = revealed as Set<Int>,
+        flagged = flagged as Set<Int>,
+        exploded = exploded as Set<Int>,
+        explodedGid = explodedGid,
+        gameOver = gameOver,
+        win = win
+    )
+}
+
+private fun HistoryEventSnapshot.toEvent(): HistoryEvent {
+    return when (type) {
+        HistoryEventSnapshot.Type.USER_COMMAND -> {
+            HistoryEvent.UserCommand(
+                action = Action.valueOf(action!!),
+                gid = gid,
+                flagValue = flagValue
+            )
+        }
+        HistoryEventSnapshot.Type.AUTO_STEP -> {
+            HistoryEvent.Auto(note = note)
+        }
+        HistoryEventSnapshot.Type.APPLY_RECOMMENDATIONS -> {
+            HistoryEvent.ApplyRecommendations(count = count)
+        }
+        HistoryEventSnapshot.Type.SYSTEM -> {
+            HistoryEvent.System(note = note)
+        }
+    }
+}

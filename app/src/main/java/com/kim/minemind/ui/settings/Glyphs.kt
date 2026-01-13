@@ -278,8 +278,8 @@ data class GlyphSet(
         require(glyphs.isNotEmpty()) { "GlyphSet $id has no glyphs" }
     }
 
-    fun forGlyphSet(): List<String> = glyphs.take(8)
-    fun preview(max: Int = 8): List<String> = glyphs.take(max)
+//    fun forGlyphSet(): List<String> = glyphs
+//    fun preview(max: Int = 8): List<String> = glyphs.take(max)
 
     /** For Minesweeper adjacency: typically 1..8 */
     fun requireAtLeast(n: Int): GlyphSet {

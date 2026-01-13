@@ -33,17 +33,26 @@ import androidx.compose.ui.graphics.graphicsLayer
 // https://material-theme.com/docs/reference/color-palette/
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.TextUnitType
+import androidx.compose.ui.unit.sp
 import com.kim.minemind.analysis.rules.Rule
 import com.kim.minemind.core.TapMode
 import com.kim.minemind.core.probabilityToGlyph
@@ -52,7 +61,9 @@ import com.kim.minemind.ui.settings.GlyphMode
 import com.kim.minemind.ui.settings.GlyphSet
 import com.kim.minemind.ui.settings.VisualCatalog
 import com.kim.minemind.ui.settings.VisualSettings
+import com.kim.minemind.ui.settings.VisualState
 import com.kim.minemind.ui.state.GameUiState
+import kotlinx.coroutines.flow.StateFlow
 
 
 /*
@@ -68,28 +79,37 @@ private const val TAG = "ui.GameViewModel"
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 fun GameTopBar(
+    vm: GameViewModel,
     moves: Int,
     timeText: String,
     onMenu: (TopMenuAction) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
+    var showVisualSettings by remember { mutableStateOf(false) }
 
     TopAppBar(
         title = {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text("MineMind", style = MaterialTheme.typography.titleMedium)
-                Text("⏱ $timeText", style = MaterialTheme.typography.bodyMedium)
-                Text("Moves: $moves", style = MaterialTheme.typography.bodyMedium)
+        if (!showVisualSettings) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // I need to hide this when the settings are displayed
+                    Text("MineMind", style = MaterialTheme.typography.titleMedium)
+                    Text("⏱ $timeText", style = MaterialTheme.typography.bodyMedium)
+                    Text("Moves: $moves", style = MaterialTheme.typography.bodyMedium)
+                }
             }
         },
         actions = {
             IconButton(onClick = { expanded = true }) {
                 Icon(Icons.Default.MoreVert, contentDescription = "Menu")
             }
-            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false }
+            ) {
                 DropdownMenuItem(
                     text = { Text("New") },
                     onClick = { expanded = false; onMenu(TopMenuAction.NEW) }
@@ -101,6 +121,15 @@ fun GameTopBar(
                 DropdownMenuItem(
                     text = { Text("Load") },
                     onClick = { expanded = false; onMenu(TopMenuAction.LOAD) }
+                )
+
+                // ⭐ Correct way: toggle the visibility state
+                DropdownMenuItem(
+                    text = { Text("Visual Settings") },
+                    onClick = {
+                        expanded = false
+                        showVisualSettings = true
+                    }
                 )
                 DropdownMenuItem(
                     text = { Text("Settings") },
@@ -117,7 +146,50 @@ fun GameTopBar(
             }
         }
     )
+
+    // ⭐ Rendering the visual settings screen OUTSIDE the menu
+    if (showVisualSettings) {
+        VisualSettingsScreen(
+            settingsFlow = vm.visualSettings,
+            onChange = vm::updateVisualSettings,
+            onDismiss = { showVisualSettings = false },
+            visualState = vm.visualState
+        )
+    }
 }
+
+
+
+@Composable
+fun GameTopBarWithMenu(vm: GameViewModel) {
+    var expanded by remember { mutableStateOf(false) }
+    var showVisualSettings by remember { mutableStateOf(false) }
+
+    // ... your TopAppBar / IconButton that toggles `expanded`
+
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = { expanded = false },
+    ) {
+        DropdownMenuItem(
+            text = { Text("Visual Settings") },
+            onClick = {
+                expanded = false
+                showVisualSettings = true
+            }
+        )
+    }
+
+    if (showVisualSettings) {
+        VisualSettingsScreen(
+            settingsFlow = vm.visualSettings,
+            onChange = vm::updateVisualSettings,
+            onDismiss = { showVisualSettings = false },
+            visualState = vm.visualState
+        )
+    }
+}
+
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -126,10 +198,10 @@ fun GameScreen(vm: GameViewModel) {
     var infoGid by remember { mutableStateOf<Int?>(null) }
     var optionsOpen by remember { mutableStateOf(false) }
 
-
     Scaffold(
         topBar = {
             GameTopBar(
+                vm = vm,
                 moves = ui.moves,
                 timeText = "00:41",
                 onMenu = { vm.handleTopMenu(it) }
@@ -149,11 +221,11 @@ fun GameScreen(vm: GameViewModel) {
                 onUndo = vm::undo,
 
                 // TODO: make it so hint stays selected and maybe nothing in the bottom menu is selected
-                onHint = { vm.setTapMode(TapMode.HINT) },
-                onInfo = { vm.setTapMode(TapMode.INFO) },
+                onHint  = { vm.setTapMode(TapMode.HINT) },
+                onInfo  = { vm.setTapMode(TapMode.INFO) },
                 onChord = { vm.setTapMode(TapMode.CHORD) },
-                onFlag = { vm.setTapMode(TapMode.FLAG) },
-                onOpen = { vm.setTapMode(TapMode.HINT) },
+                onFlag  = { vm.setTapMode(TapMode.FLAG) },
+                onOpen  = { vm.setTapMode(TapMode.HINT) },
             )
         }
     ) { pad ->
@@ -173,7 +245,9 @@ fun GameScreen(vm: GameViewModel) {
                         TapMode.HINT -> vm.hint(gid)
                     }
                 },
-                onCellLongPress = { gid -> vm.dispatch(Action.FLAG, gid) }
+                onCellLongPress = { gid -> vm.dispatch(Action.FLAG, gid)},
+                visualState = vm.visualState,
+                visualSettings = vm.visualSettings
             )
 
             TapModeRow(
@@ -641,7 +715,10 @@ fun BoardFrame(
     ui: GameUiState,
     onCell: (Int) -> Unit,
     onCellLongPress: (Int) -> Unit,
+    visualState: StateFlow<VisualState>,
+    visualSettings: StateFlow<VisualSettings>
 ) {
+
     val rows = ui.rows
     val cols = ui.cols
     val cells = ui.cells
@@ -664,6 +741,9 @@ fun BoardFrame(
     // how much background you want to be able to reveal on either side
     val slackDp: Dp = 120.dp
 
+    val state by visualState.collectAsState()
+    val settings by visualSettings.collectAsState()
+
     BoxWithConstraints(
         modifier = Modifier
             .border(4.dp, Color(0xFF282A36), shape)
@@ -673,10 +753,10 @@ fun BoardFrame(
         val viewportW = constraints.maxWidth.toFloat()
         val viewportH = constraints.maxHeight.toFloat()
 
-        val density = LocalDensity.current
+        val density  = LocalDensity.current
         val boardWpx = with(density) { boardW.toPx() }
         val boardHpx = with(density) { boardH.toPx() }
-        val slackPx = with(density) { slackDp.toPx() }
+        val slackPx  = with(density) { slackDp.toPx() }
 
         fun clampOffset(newOffset: Offset, newScale: Float)
                 : Offset {
@@ -764,7 +844,8 @@ fun BoardFrame(
                     val notRevealedBackground = Color(0xFF282C34)
                     val explodedBackground = Color(0xFFf78c6c) // 0xFF9B859D 0xFF80cbc4
                     val incorrectPinkColor = Color(0xFFc792ea)
-                    val probAndRuleColor = Color(0xff7286BF)
+                    val probColor = Color(0xff7286BF)
+                    val ruleColor = Color(0xffbcc8eb)
 
                     if (cell.isRevealed) {
                         if (cell.adjacentMines == 0) {
@@ -773,8 +854,11 @@ fun BoardFrame(
                             txt = ""
                         } else if (cell.adjacentMines >= 1) {
                             bg = revealedBackground
-                            fg = if (cell.conflict) incorrectPinkColor else revealedFont
-                            txt = cell.adjacentMines.toString()
+                            fg = if (cell.conflict) incorrectPinkColor else
+                                (if (settings.glyphMode == GlyphMode.COLORS)
+                                    Color(state.colors.get(cell.adjacentMines-1))
+                                    else revealedFont)
+                            txt = state.glyphs.get(cell.adjacentMines-1)
                         } else if (cell.isMine) {
                             if (cell.isExploded) {
                                 bg = explodedBackground
@@ -798,10 +882,17 @@ fun BoardFrame(
                                 fg = revealedFont
                                 txt = "F"
                             }
-                        } else if (cell.isExploded) {
-                            bg = incorrectPinkColor
-                            fg = revealedFont
-                            txt = "@"
+                        } else if (cell.isExploded) {  // unflagged mine
+                            if (cell.isExplodedGid) {
+                                bg = explodedBackground
+                                fg = revealedFont
+                                txt = "@"
+                            }
+                            else {
+                                bg = incorrectPinkColor
+                                fg = revealedFont
+                                txt = "F"
+                            }
                         } else if (isEnumerate) {
                             if (cell.conflict) {
                                 bg = notRevealedBackground
@@ -809,15 +900,15 @@ fun BoardFrame(
                                 txt = "C"
                             } else if (cell.forcedFlag) {
                                 bg = notRevealedBackground
-                                fg = probAndRuleColor
+                                fg = ruleColor
                                 txt = "X"
                             } else if (cell.forcedOpen) {
                                 bg = notRevealedBackground
-                                fg = probAndRuleColor
+                                fg = ruleColor
                                 txt = "O"
                             } else if (ui.overlay.isConsistent && cell.probability != null) {
                                 bg = notRevealedBackground
-                                fg = probAndRuleColor
+                                fg = probColor
                                 txt = probabilityToGlyph(cell.probability)
                             } else {
                                 bg = notRevealedBackground
@@ -867,23 +958,32 @@ fun BoardFrame(
     }
 }
 
-
 @Composable
 fun VisualSettingsScreen(
-    settings: VisualSettings,
+    settingsFlow: StateFlow<VisualSettings>,
     onChange: (VisualSettings) -> Unit,
+    onDismiss: () -> Unit,
+    visualState: StateFlow<VisualState>
 ) {
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
+    val settings by settingsFlow.collectAsState()
+    val state by visualState.collectAsState()
 
-        Text("Cell Glyphs", style = MaterialTheme.typography.titleLarge)
+    val scrollStateVert = rememberScrollState()
+
+    Column(Modifier.fillMaxSize()
+        .verticalScroll(scrollStateVert)
+        .padding(16.dp)) {
+
         Spacer(Modifier.height(12.dp))
+        Text("Cell Glyphs", style = MaterialTheme.typography.titleLarge)
+        Spacer(Modifier.height(16.dp))
 
         ModeSelector(
             mode = settings.glyphMode,
             onMode = { onChange(settings.copy(glyphMode = it)) }
         )
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(12.dp))
 
         when (settings.glyphMode) {
             GlyphMode.NUMERALS -> {
@@ -893,15 +993,22 @@ fun VisualSettingsScreen(
                     selectedId = settings.numeralSetId,
                     onSelect = { onChange(settings.copy(numeralSetId = it)) }
                 )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Switch(
-                        checked = settings.shuffleGlyphs,
-                        onCheckedChange = { onChange(settings.copy(shuffleGlyphs = it)) }
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text("Shuffle numerals")
+
+                Spacer(Modifier.width(12.dp))
+
+                val glyphs = VisualCatalog.numeral(settings.numeralSetId).glyphs.take(8)
+                val scrollStateHorz = rememberScrollState()
+                Box(
+                    Modifier
+                        .horizontalScroll(scrollStateHorz)
+                        .fillMaxWidth()
+                ) {
+                    val boxSize = PreviewGlyphGrid(glyphs)
+                    settings.copy(glyphSize = boxSize)
                 }
-                PreviewRowStrings(VisualCatalog.numeral(settings.numeralSetId).preview())
+
+                Spacer(Modifier.height(8.dp))
+                state.copy(glyphs = glyphs)
             }
 
             GlyphMode.ALPHABET -> {
@@ -917,9 +1024,26 @@ fun VisualSettingsScreen(
                         onCheckedChange = { onChange(settings.copy(shuffleGlyphs = it)) }
                     )
                     Spacer(Modifier.width(8.dp))
-                    Text("Shuffle letters")
+                    Text("Shuffle")
                 }
-                PreviewRowStrings(VisualCatalog.alpha(settings.alphaSetId).preview())
+
+                Spacer(Modifier.width(12.dp))
+                val glyphs = if (settings.shuffleGlyphs)
+                    VisualCatalog.alpha(settings.alphaSetId).glyphs.shuffled().take(8) else
+                        VisualCatalog.alpha(settings.alphaSetId).glyphs.take(8)
+
+                val scrollStateHorz = rememberScrollState()
+                Box(
+                    Modifier
+                        .horizontalScroll(scrollStateHorz)
+                        .fillMaxWidth()
+                ) {
+                    val boxSize = PreviewGlyphGrid(glyphs)
+                    settings.copy(glyphSize = boxSize)
+                }
+
+                Spacer(Modifier.height(8.dp))
+                state.copy(glyphs = glyphs)
             }
 
             GlyphMode.COLORS -> {
@@ -935,13 +1059,38 @@ fun VisualSettingsScreen(
                         onCheckedChange = { onChange(settings.copy(shuffleColors = it)) }
                     )
                     Spacer(Modifier.width(8.dp))
-                    Text("Shuffle colors")
+                    Text("Shuffle")
                 }
-                PreviewRowColors(VisualCatalog.colors(settings.colorSetId).preview())
+                val colors = if (settings.shuffleColors)
+                    VisualCatalog.colors(settings.colorSetId).colors.shuffled() else
+                        VisualCatalog.colors(settings.colorSetId).colors
+
+                PreviewRowColors(colors)
+                Spacer(Modifier.height(8.dp))
+                state.copy(colors = colors)
             }
+        }
+        Button( onClick = onDismiss, ) {
+            Text("Close")
         }
     }
 }
+
+@Composable
+fun MeasuredGlyph(
+    glyph: String,
+    fontSize: Float,
+    onHeightMeasured: (Int) -> Unit
+) {
+    Text(
+        glyph,
+        fontSize = fontSize.sp,
+        modifier = Modifier.onGloballyPositioned { coords ->
+            onHeightMeasured(coords.size.height)  // height in px
+        }.padding(horizontal = 5.dp, vertical = 4.dp)
+    )
+}
+
 
 @Composable
 private fun ModeSelector(mode: GlyphMode, onMode: (GlyphMode) -> Unit) {
@@ -1019,18 +1168,59 @@ private fun ColorSetPicker(
 }
 
 @Composable
-private fun PreviewRowStrings(items: List<String>) {
+private fun PreviewRowStrings(items: List<String>,
+                              fontSize: Float,
+                              onGlyphHeight: (Int) -> Unit) {
     Spacer(Modifier.height(10.dp))
     Text("Preview", style = MaterialTheme.typography.titleSmall)
     Spacer(Modifier.height(6.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items.forEach { s ->
-            Surface(tonalElevation = 2.dp, shape = MaterialTheme.shapes.small) {
-                Text(s, Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+
+            Box {
+                MeasuredGlyph(s, fontSize) { heightPx ->
+                    onGlyphHeight(heightPx)
+                }
             }
+
+//            Surface(tonalElevation = 2.dp, shape = MaterialTheme.shapes.small) {
+//                Text(
+//                    text = s,
+//                    fontSize = fontSize.sp,
+//                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+//                )
+//            }
         }
     }
 }
+
+@Composable
+fun PreviewGlyphGrid(
+    glyphs: List<String>
+): Int {
+    var maxHeightPx by remember { mutableStateOf(0) }
+    val density = LocalDensity.current
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        glyphs.forEach { glyph ->
+            Box( modifier = Modifier
+                .padding(3.dp) .border(1.dp, Color.Gray), contentAlignment = Alignment.Center ) {
+                Text(
+                    text = glyph,
+                    fontSize = 24.sp,
+                    modifier = Modifier.onGloballyPositioned { coords ->
+                        val h = coords.size.height
+                        val w = coords.size.width
+                        if (h > maxHeightPx) maxHeightPx = h
+                        if (w > maxHeightPx) maxHeightPx = w
+                    }
+                )
+            }
+        }
+    }
+    val boxSize = with(density) { maxHeightPx.toDp().coerceAtLeast(24.dp) }
+    return maxHeightPx
+}
+
 
 @Composable
 private fun PreviewRowColors(items: List<Long>) {
@@ -1043,7 +1233,7 @@ private fun PreviewRowColors(items: List<Long>) {
                 Box(
                     Modifier
                         .size(26.dp)
-                        .background(androidx.compose.ui.graphics.Color(argb))
+                        .background(Color(argb))
                 )
             }
         }

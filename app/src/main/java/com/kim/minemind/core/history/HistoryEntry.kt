@@ -1,6 +1,7 @@
 package com.kim.minemind.core.history
 
-import com.kim.minemind.shared.snapshot.HistoryEntrySnapshot
+import kotlinx.serialization.Contextual
+import kotlinx.serialization.Serializable
 
 
 data class HistoryEntry(
@@ -18,10 +19,19 @@ fun HistoryEntry.toSnapshot(): HistoryEntrySnapshot =
         remainingSafeBefore = remainingSafeBefore
     )
 
-fun HistoryEntrySnapshot.toHistoryEntry(): HistoryEntry =
+
+fun HistoryEntrySnapshot.toEntry(): HistoryEntry =
     HistoryEntry(
         event = event.toEvent(),
         changes = changes.toChangeSet(),
         moveCountBefore = moveCountBefore,
         remainingSafeBefore = remainingSafeBefore
     )
+
+@Serializable
+data class HistoryEntrySnapshot(
+    val event: HistoryEventSnapshot,
+    @Contextual val changes: ChangeSetSnapshot, // this line
+    val moveCountBefore: Int,
+    val remainingSafeBefore: Int
+)

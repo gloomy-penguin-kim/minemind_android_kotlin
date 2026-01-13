@@ -10,6 +10,7 @@ data class Cell(
     var isRevealed: Boolean = false,
     var isFlagged: Boolean = false,
     var isExploded: Boolean = false,
+    var isExplodedGid: Boolean = false,
     var adjacentMines: Int = 0
 )
 

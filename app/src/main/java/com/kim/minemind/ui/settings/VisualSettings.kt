@@ -1,6 +1,7 @@
 package com.kim.minemind.ui.settings
 
 import androidx.compose.runtime.Immutable
+import androidx.compose.ui.unit.Dp
 
 enum class GlyphMode { NUMERALS, ALPHABET, COLORS }
 @Immutable
@@ -9,13 +10,16 @@ data class VisualSettings(
 
     val numeralSetId: String = "latin_digits",
     val alphaSetId: String = "latin_letters",
-    val colorSetId: String = "classic_dots",
-//
+    val colorSetId: String = "classic",
+
 //    val shuffleSeed: Long = 0L,
     val shuffleGlyphs: Boolean = false,
     val shuffleColors: Boolean = false,
 
     val themeId: String = "default",
+
+    val fontSize: Float = 16f,
+    val glyphSize: Int = 16
 )
 
 data class VisualState(

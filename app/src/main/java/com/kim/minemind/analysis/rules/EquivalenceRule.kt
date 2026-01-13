@@ -51,7 +51,7 @@ fun equivalenceRule(
                 moves.addConflicts(
                     mask = (a.clone() as BitSet),
                     localToGlobal = comp.localToGlobal,
-                    listOf("EQUALITY_CONTRADICTION: A==B but remaining differs",
+                    listOf("Equality Contradiction: A==B but remaining differs",
 //                        "A=$a rem=$remA",
 //                        "B=$b rem=$remB"
                         )

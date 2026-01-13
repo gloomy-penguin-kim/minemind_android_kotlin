@@ -11,7 +11,7 @@ class VisualResolver(
         return when (settings.glyphMode) {
             GlyphMode.NUMERALS -> {
                 val set = numeralSets.first { it.id == settings.numeralSetId }
-                val glyphs = set.forGlyphSet()
+                val glyphs = set.glyphs.take(8)
                 VisualState(
                     glyphs = glyphs,
                     colors = emptyList()
@@ -19,14 +19,16 @@ class VisualResolver(
             }
             GlyphMode.ALPHABET -> {
                 val set = alphaSets.first { it.id == settings.alphaSetId }
-                val base = set.forGlyphSet()
-                val glyphs = if (settings.shuffleGlyphs) base.shuffled(rng) else base
+                val base = set.glyphs
+                var glyphs = if (settings.shuffleGlyphs) base.shuffled(rng) else base
+                glyphs = glyphs.take(8)
                 VisualState(glyphs = glyphs, colors = emptyList())
             }
             GlyphMode.COLORS -> {
                 val set = colorSets.first { it.id == settings.colorSetId }
-                val base = set.colors.take(n=8)
-                val colors = if (settings.shuffleColors) base.shuffled(rng) else base
+                val base = set.colors
+                var colors = if (settings.shuffleColors) base.shuffled(rng) else base
+                colors = colors.take(8)
                 // glyphs can be "•" repeated, or "", or "●"
                 VisualState(glyphs = List(8) { "●" }, colors = colors)
             }

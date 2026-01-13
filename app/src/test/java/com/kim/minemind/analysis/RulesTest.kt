@@ -36,7 +36,7 @@ class RulesTest {
         equivalenceRule(comp, moves, stopAfterOne = false)
 
         // all gids in mask should be marked conflict-highlight
-        assertTrue(moves.conflictsGids.containsAll(listOf(0, 1, 2)))
+        assertTrue(moves.getConflicts().keys.containsAll(listOf(0, 1, 2)))
     }
 
     @Test
@@ -62,7 +62,7 @@ class RulesTest {
         assertTrue(moves.forcedOpens.size == 2)
         assertTrue(1 in moves.forcedOpens)
         assertTrue(2 in moves.forcedOpens)
-        assertTrue(moves.conflictsGids.isEmpty())
+        assertTrue(moves.getConflicts().keys.isEmpty())
     }
 
     @Test
@@ -88,7 +88,7 @@ class RulesTest {
         assertTrue(moves.forcedFlags.size == 2)
         assertTrue(0 in moves.forcedFlags)
         assertTrue(3 in moves.forcedFlags)
-        assertTrue(moves.conflictsGids.isEmpty())
+        assertTrue(moves.getConflicts().keys.isEmpty())
     }
 
     @Test
@@ -115,7 +115,7 @@ class RulesTest {
 
         assertTrue(moves.forcedOpens.size == 1)
         assertTrue(2 in moves.forcedOpens)
-        assertTrue(moves.conflictsGids.isEmpty())
+        assertTrue(moves.getConflicts().keys.isEmpty())
     }
 
     @Test
@@ -142,7 +142,7 @@ class RulesTest {
 
         assertTrue(moves.forcedFlags.size == 1)
         assertTrue(2 in moves.forcedFlags)
-        assertTrue(moves.conflictsGids.isEmpty())
+        assertTrue(moves.getConflicts().keys.isEmpty())
     }
 
     @Test
@@ -169,7 +169,7 @@ class RulesTest {
 
         assertTrue(moves.forcedFlags.size == 1)
         assertTrue(2 in moves.forcedFlags)
-        assertTrue(moves.conflictsGids.isEmpty())
+        assertTrue(moves.getConflicts().keys.isEmpty())
     }
 
     @Test
@@ -194,6 +194,8 @@ class RulesTest {
 
         assertTrue(moves.forcedFlags.size == 1)
         assertTrue(0 in moves.forcedFlags)
-        assertTrue(moves.conflictsGids.isEmpty())
+        assertTrue(moves.getConflicts().keys.isEmpty())
     }
+
+
 }

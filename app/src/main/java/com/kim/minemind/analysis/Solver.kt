@@ -3,7 +3,6 @@ package com.kim.minemind.analysis
 import com.kim.minemind.analysis.frontier.Component
 import com.kim.minemind.core.board.Board
 import com.kim.minemind.analysis.frontier.Frontier
-import com.kim.minemind.shared.Move
 
 class Solver() {
 
@@ -40,8 +39,4 @@ class Solver() {
         components = emptyList()
     }
 
-
-    fun hint(guess: Boolean = false): List<Move> = emptyList()
-    fun step(guess: Boolean = false): List<Move> = emptyList()
-    fun auto(guess: Boolean = false, limit: Int? = null): List<Move> = emptyList()
 }

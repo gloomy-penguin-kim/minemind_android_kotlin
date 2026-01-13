@@ -6,6 +6,7 @@ data class CellUI(
     val isRevealed: Boolean,
     val isFlagged: Boolean,
     val isExploded: Boolean,
+    val isExplodedGid: Boolean,
     val adjacentMines: Int,
 
     val probability: Float?,      // from overlay

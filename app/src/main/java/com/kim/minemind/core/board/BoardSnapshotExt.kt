@@ -2,6 +2,8 @@ package com.kim.minemind.core.board
 
 import com.kim.minemind.shared.snapshot.BoardSnapshot
 import com.kim.minemind.shared.snapshot.CellSnapshot
+import kotlin.div
+import kotlin.rem
 
 fun Board.toSnapshot(): BoardSnapshot =
     BoardSnapshot(
@@ -9,10 +11,13 @@ fun Board.toSnapshot(): BoardSnapshot =
         cols = cols,
         mines = mines,
         seed = seed,
+
         minesPlaced = minesPlaced,
         gameOver = gameOver,
         win = win,
         remainingSafe = remainingSafe,
+        explodedGid = explodedGid,
+
         cells = cells.map { cell ->
             CellSnapshot(
                 gid = cell.gid,
@@ -30,7 +35,12 @@ fun Board.restoreFromSnapshot(s: BoardSnapshot) {
     require(mines == s.mines) { "Board mine count mismatch" }
     require(seed == s.seed) { "Board seed mismatch" }
 
-    // These are private-set in your Board; easiest is to add internal setters
-    // OR make a restore function inside Board. Since you showed private set,
-    // the cleanest is to implement restore *inside* Board as a method.
+    val board = Board(rows, cols, mines, seed)
+    board.setMinesPlaced(s.minesPlaced)
+    board.setGameOver(s.gameOver)
+    board.setWin(s.win)
+    board.setRemainingSafe(s.remainingSafe)
+    board.setExplodedGid(s.explodedGid)
+    board.setCells(s.cells)
 }
+

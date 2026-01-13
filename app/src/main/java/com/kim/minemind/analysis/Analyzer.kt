@@ -10,7 +10,6 @@ import com.kim.minemind.analysis.rules.RuleResult
 import com.kim.minemind.core.Action
 import com.kim.minemind.core.board.Board
 import com.kim.minemind.shared.ConflictList
-import com.kim.minemind.shared.Move
 
 class Analyzer() {
     private val config: AnalysisConfig = AnalysisConfig
@@ -92,28 +91,28 @@ class Analyzer() {
         return true
     }
 
-    private fun compareRulesAndProbsForConflict(rules: RuleResult, probs: Map<Int, Float>): ConflictList {
+    private fun compareRulesAndProbsForConflict(rules: RuleResult, prob: Map<Int, Float>): ConflictList {
         val conflictList = ConflictList()
 
         val ruleList = rules.ruleList
         for (rule in ruleList) {
             val gid = rule.key
-            val action = rule.value.action
+            val action = rule.value.toAction()
 
-            if (probs.containsKey(gid)) {
-                if (!probs.containsKey(gid)) {
+            if (prob.containsKey(gid)) {
+                if (!prob.containsKey(gid)) {
                     conflictList.addConflict(gid, "Probability and rules do not agree.")
                 }
                 else {
                     if (action == Action.FLAG) {
-                        probs[gid]?.let {
+                        prob[gid]?.let {
                             if (it < 0.5f) {
                                 conflictList.addConflict(gid, "Probability and rules do not agree.")
                             }
                         }
                     }
                     if (action == Action.OPEN) {
-                        probs[gid]?.let {
+                        prob[gid]?.let {
                             if (it > 0.5f) {
                                 conflictList.addConflict(gid, "Probability and rules do not agree.")
                             }

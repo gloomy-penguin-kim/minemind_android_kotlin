@@ -1,5 +1,6 @@
 package com.kim.minemind.core.history
 
+
 data class ChangeSet(
     val revealed: Set<Int> = emptySet(),
     val flagged: Set<Int> = emptySet(),
@@ -9,8 +10,9 @@ data class ChangeSet(
     val win: Boolean = false,
 ) {
 
-    val empty: Boolean get() =
-        revealed.isEmpty() && flagged.isEmpty() && exploded.isEmpty() && !gameOver && !win
+    val empty: Boolean
+        get() =
+            revealed.isEmpty() && flagged.isEmpty() && exploded.isEmpty() && !gameOver && !win
 
     fun merged(other: ChangeSet): ChangeSet =
         ChangeSet(
@@ -21,16 +23,16 @@ data class ChangeSet(
             gameOver = gameOver || other.gameOver,
             win = win || other.win
         )
-
     fun getAllGid(): Set<Int> = revealed + flagged + exploded
+
+    fun toSnapshot(): ChangeSetSnapshot =
+        ChangeSetSnapshot(
+            revealed = revealed,
+            flagged  = flagged,
+            exploded = exploded,
+            explodedGid = explodedGid,
+            gameOver = gameOver,
+            win = win
+        )
 }
 
-fun ChangeSet.toSnapshot(): ChangeSetSnapshot =
-    ChangeSetSnapshot(
-        revealed = revealed.toIntArray(),
-        flagged = flagged.toIntArray(),
-        exploded = exploded.toIntArray(),
-        explodedGid = explodedGid,
-        gameOver = gameOver,
-        win = win
-    )
