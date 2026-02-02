@@ -12,18 +12,15 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class GameSnapshot(
     val board: BoardSnapshot,
-    val history: HistorySnapshot
+    val moves: Int,
 )
 
-//@Serializable
-//data class ChangeSetSnapshot(
-//    val revealed: Set<Int> = emptySet(),
-//    val flagged: Set<Int> = emptySet(),
-//    val exploded: Set<Int> = emptySet(),
-//    val explodedGid: Int = -1,
-//    val gameOver: Boolean = false,
-//    val win: Boolean = false,
-//)
+@Serializable
+data class MoveRecord(
+    val gid: Int,
+    val action: Action,
+    val timestamp: Long
+)
 
 @Serializable
 data class BoardSnapshot(
@@ -31,6 +28,7 @@ data class BoardSnapshot(
     val cols: Int,
     val mines: Int,
     val seed: Int,
+    val firstClickGid: Int,
     val minesPlaced: Boolean,
     val gameOver: Boolean,
     val win: Boolean,
@@ -46,6 +44,7 @@ data class CellSnapshot(
     val isRevealed: Boolean,
     val isFlagged: Boolean,
     val isExploded: Boolean,
+    val isExplodedGid: Boolean,
     val adjacentMines: Int
 )
 
@@ -90,9 +89,9 @@ fun autoStepEvent(note: String = "") =
 
 private fun ChangeSetSnapshot.toChangeSet(): ChangeSet {
     return ChangeSet(
-        revealed = revealed as Set<Int>,
-        flagged = flagged as Set<Int>,
-        exploded = exploded as Set<Int>,
+        revealed = revealed,
+        flagged = flagged,
+        exploded = exploded,
         explodedGid = explodedGid,
         gameOver = gameOver,
         win = win

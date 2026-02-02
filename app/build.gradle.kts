@@ -53,6 +53,9 @@ dependencies {
     implementation("androidx.privacysandbox.tools:tools-core:1.0.0-alpha14")
     implementation("androidx.compose.animation:animation-core:1.10.0")
     implementation("androidx.compose.runtime:runtime:1.10.0")
+    implementation("androidx.appcompat:appcompat:1.7.1")
+    implementation("androidx.preference:preference:1.2.0")
+    implementation("com.google.android.material:material:1.4.0")
     val composeBom = platform("androidx.compose:compose-bom:2024.09.02")
     implementation(composeBom)
 
@@ -74,5 +77,7 @@ dependencies {
 
     implementation("androidx.datastore:datastore-preferences:1.1.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+
+    implementation("androidx.preference:preference-ktx:1.2.0")
 
 }

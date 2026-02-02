@@ -17,17 +17,22 @@ data class GameUiState(
     val rows: Int = 9,
     val cols: Int = 9,
     val mines: Int = 10,
+    val seed: Int =  0,
+    val firstClickGid: Int = -1,
+
     val moves: Int = 0,
     val gameOver: Boolean = false,
     val win: Boolean = false,
+
     val tapMode: TapMode = TapMode.OPEN,
-//    val cells: List<CellUI> = emptyList(),
+
     val cells: SnapshotStateList<CellUI> = mutableStateListOf(),
 
     val conflictBoard: ConflictList = ConflictList(),
     val conflictProbs: ConflictList = ConflictList(),
     val ruleList: Map<Int, Rule> = emptyMap(),
     val overlay: AnalyzerOverlay = AnalyzerOverlay(),
+
     val isVerify: Boolean = false,
     val isEnumerate: Boolean = false,
 )

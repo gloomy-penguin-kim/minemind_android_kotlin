@@ -28,10 +28,3 @@ fun HistoryEntrySnapshot.toEntry(): HistoryEntry =
         remainingSafeBefore = remainingSafeBefore
     )
 
-@Serializable
-data class HistoryEntrySnapshot(
-    val event: HistoryEventSnapshot,
-    @Contextual val changes: ChangeSetSnapshot, // this line
-    val moveCountBefore: Int,
-    val remainingSafeBefore: Int
-)

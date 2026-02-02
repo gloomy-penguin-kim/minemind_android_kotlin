@@ -12,6 +12,8 @@ fun Board.toSnapshot(): BoardSnapshot =
         mines = mines,
         seed = seed,
 
+        firstClickGid = firstClickGid,
+
         minesPlaced = minesPlaced,
         gameOver = gameOver,
         win = win,
@@ -25,6 +27,7 @@ fun Board.toSnapshot(): BoardSnapshot =
                 isRevealed = cell.isRevealed,
                 isFlagged = cell.isFlagged,
                 isExploded = cell.isExploded,
+                isExplodedGid = cell.isExplodedGid,
                 adjacentMines = cell.adjacentMines
             )
         }

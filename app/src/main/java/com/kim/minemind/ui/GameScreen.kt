@@ -719,243 +719,244 @@ fun BoardFrame(
     visualSettings: StateFlow<VisualSettings>
 ) {
 
-    val rows = ui.rows
-    val cols = ui.cols
-    val cells = ui.cells
-
-    val isVerify = ui.isVerify
-    val isEnumerate = ui.isEnumerate
-
-    val shape = RoundedCornerShape(8.dp)
-    val cellSize = 34.dp
-
-    val boardW = cellSize * cols
-    val boardH = cellSize * rows
-
-    var scale by remember { mutableStateOf(1f) }
-    var offset by remember { mutableStateOf(Offset.Zero) }
-
-    val minScale = 0.6f
-    val maxScale = 3.0f
-
-    // how much background you want to be able to reveal on either side
-    val slackDp: Dp = 120.dp
-
-    val state by visualState.collectAsState()
-    val settings by visualSettings.collectAsState()
-
-    BoxWithConstraints(
-        modifier = Modifier
-            .border(4.dp, Color(0xFF282A36), shape)
-            .clip(shape)
-            .background(Color(0xFF111318))
-    ) {
-        val viewportW = constraints.maxWidth.toFloat()
-        val viewportH = constraints.maxHeight.toFloat()
-
-        val density  = LocalDensity.current
-        val boardWpx = with(density) { boardW.toPx() }
-        val boardHpx = with(density) { boardH.toPx() }
-        val slackPx  = with(density) { slackDp.toPx() }
-
-        fun clampOffset(newOffset: Offset, newScale: Float)
-                : Offset {
-
-            val scaledW = boardWpx * newScale
-            val scaledH = boardHpx * newScale
-
-            // If board is smaller than viewport, allow it to float around centered (still with slack).
-            // If board is bigger, allow symmetric overscroll via slackPx.
-            val baseMinX = viewportW - scaledW
-            val baseMinY = viewportH - scaledH
-
-            val minX = if (scaledW <= viewportW) {
-                ((viewportW - scaledW) / 2f) - slackPx
-            } else {
-                baseMinX - viewportW
-            }
-            val maxX = if (scaledW <= viewportW) {
-                ((viewportW - scaledW) / 2f) + slackPx
-            } else {
-                0f + viewportW
-            }
-
-            val minY = if (scaledH <= viewportH) {
-                ((viewportH - scaledH) / 2f) - slackPx
-            } else {
-                baseMinY - viewportH
-            }
-            val maxY = if (scaledH <= viewportH) {
-                ((viewportH - scaledH) / 2f) + slackPx
-            } else {
-                0f + viewportH
-            }
-
-            return Offset(
-                x = newOffset.x.coerceIn(minX, maxX),
-                y = newOffset.y.coerceIn(minY, maxY),
-            )
-        }
-
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(Unit) {
-                    detectTransformGestures { _, pan, zoom, _ ->
-                        val newScale = (scale * zoom).coerceIn(minScale, maxScale)
-                        val newOffset = offset + pan
-                        scale = newScale
-                        offset = clampOffset(newOffset, newScale)
-                    }
-                }
-        ) {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(cols),
-                userScrollEnabled = false,
-                modifier = Modifier
-                    .requiredSize(boardW, boardH)
-                    .graphicsLayer {
-                        // IMPORTANT: makes clamp math behave intuitively
-                        transformOrigin = TransformOrigin(0f, 0f)
-
-                        scaleX = scale
-                        scaleY = scale
-                        translationX = offset.x
-                        translationY = offset.y
-                    },
-                horizontalArrangement = Arrangement.spacedBy(0.dp),
-                verticalArrangement = Arrangement.spacedBy(0.dp),
-            ) {
-
-
-                items(cells, key = { it.gid }) { cell ->
-
-                    var bg = Color(0xFF282C34)
-                    var txt = ""
-                    var fg = Color(0xFFFFFFFF)
-
-                    // •
-                    // https://materialui.co/colors
-                    // https://material-theme.com/docs/reference/color-palette/
-
-                    val flagBlueColor = Color(0xFF61AEEF)
-                    val revealedFont = Color(0xFFFFFFFF)
-                    val revealedBackground = Color(0xFF4D515D)
-                    val notRevealedBackground = Color(0xFF282C34)
-                    val explodedBackground = Color(0xFFf78c6c) // 0xFF9B859D 0xFF80cbc4
-                    val incorrectPinkColor = Color(0xFFc792ea)
-                    val probColor = Color(0xff7286BF)
-                    val ruleColor = Color(0xffbcc8eb)
-
-                    if (cell.isRevealed) {
-                        if (cell.adjacentMines == 0) {
-                            bg = revealedBackground
-                            fg = revealedBackground
-                            txt = ""
-                        } else if (cell.adjacentMines >= 1) {
-                            bg = revealedBackground
-                            fg = if (cell.conflict) incorrectPinkColor else
-                                (if (settings.glyphMode == GlyphMode.COLORS)
-                                    Color(state.colors.get(cell.adjacentMines-1))
-                                    else revealedFont)
-                            txt = state.glyphs.get(cell.adjacentMines-1)
-                        } else if (cell.isMine) {
-                            if (cell.isExploded) {
-                                bg = explodedBackground
-                                fg = revealedFont
-                                txt = "@"
-                            }
-                            else {
-                                bg = if (cell.isFlagged) flagBlueColor else incorrectPinkColor
-                                fg = revealedFont
-                                txt = if (cell.isFlagged) "F" else "X"
-                            }
-                        }
-                    } else { // not revealed
-                        if (cell.isFlagged) {
-                            if ((ui.isVerify or ui.gameOver) and !cell.isMine) {
-                                bg = incorrectPinkColor
-                                fg = revealedFont
-                                txt = "F"
-                            } else {
-                                bg = flagBlueColor
-                                fg = revealedFont
-                                txt = "F"
-                            }
-                        } else if (cell.isExploded) {  // unflagged mine
-                            if (cell.isExplodedGid) {
-                                bg = explodedBackground
-                                fg = revealedFont
-                                txt = "@"
-                            }
-                            else {
-                                bg = incorrectPinkColor
-                                fg = revealedFont
-                                txt = "F"
-                            }
-                        } else if (isEnumerate) {
-                            if (cell.conflict) {
-                                bg = notRevealedBackground
-                                fg = incorrectPinkColor
-                                txt = "C"
-                            } else if (cell.forcedFlag) {
-                                bg = notRevealedBackground
-                                fg = ruleColor
-                                txt = "X"
-                            } else if (cell.forcedOpen) {
-                                bg = notRevealedBackground
-                                fg = ruleColor
-                                txt = "O"
-                            } else if (ui.overlay.isConsistent && cell.probability != null) {
-                                bg = notRevealedBackground
-                                fg = probColor
-                                txt = probabilityToGlyph(cell.probability)
-                            } else {
-                                bg = notRevealedBackground
-                                fg = revealedFont
-                                txt = ""
-                            }
-                        }
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .size(cellSize)
-                            .padding(2.dp)
-                            .border(
-                                width = 1.dp,
-                                color = notRevealedBackground)
-                            .background(notRevealedBackground)
-                            .combinedClickable(
-                                onClick = { onCell(cell.gid) },
-                                onLongClick = { onCellLongPress(cell.gid) }
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(cellSize)
-                                .padding(0.dp)
-                                .border(
-                                    width= 1.dp,
-                                    color = notRevealedBackground,
-                                    shape = RoundedCornerShape(5))
-                                .background(
-                                    color = bg,
-                                    shape = RoundedCornerShape(5))
-                                .combinedClickable(
-                                    onClick = { onCell(cell.gid) },
-                                    onLongClick = { onCellLongPress(cell.gid) }
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(txt, color = fg)
-                        }
-                    }
-                }
-            }
-        }
-    }
+//    val rows = ui.rows
+//    val cols = ui.cols
+//    val cells = ui.cells
+//
+//    val isVerify = ui.isVerify
+//    val isEnumerate = ui.isEnumerate
+//
+//    val shape = RoundedCornerShape(8.dp)
+//    val cellSize = 34.dp
+//
+//    val boardW = cellSize * cols
+//    val boardH = cellSize * rows
+//
+//    var scale by remember { mutableStateOf(1f) }
+//    var offset by remember { mutableStateOf(Offset.Zero) }
+//
+//    val minScale = 0.6f
+//    val maxScale = 3.0f
+//
+//    // how much background you want to be able to reveal on either side
+//    val slackDp: Dp = 120.dp
+//
+//    val state by visualState.collectAsState()
+//    val settings by visualSettings.collectAsState()
+//
+//    BoxWithConstraints(
+//        modifier = Modifier
+//            .border(4.dp, Color(0xFF282A36), shape)
+//            .clip(shape)
+//            .background(Color(0xFF111318))
+//    ) {
+//        val viewportW = constraints.maxWidth.toFloat()
+//        val viewportH = constraints.maxHeight.toFloat()
+//
+//        val density  = LocalDensity.current
+//        val boardWpx = with(density) { boardW.toPx() }
+//        val boardHpx = with(density) { boardH.toPx() }
+//        val slackPx  = with(density) { slackDp.toPx() }
+//
+//        fun clampOffset(newOffset: Offset, newScale: Float)
+//                : Offset {
+//
+//            val scaledW = boardWpx * newScale
+//            val scaledH = boardHpx * newScale
+//
+//            // If board is smaller than viewport, allow it to float around centered (still with slack).
+//            // If board is bigger, allow symmetric overscroll via slackPx.
+//            val baseMinX = viewportW - scaledW
+//            val baseMinY = viewportH - scaledH
+//
+//            val minX = if (scaledW <= viewportW) {
+//                ((viewportW - scaledW) / 2f) - slackPx
+//            } else {
+//                baseMinX - viewportW
+//            }
+//            val maxX = if (scaledW <= viewportW) {
+//                ((viewportW - scaledW) / 2f) + slackPx
+//            } else {
+//                0f + viewportW
+//            }
+//
+//            val minY = if (scaledH <= viewportH) {
+//                ((viewportH - scaledH) / 2f) - slackPx
+//            } else {
+//                baseMinY - viewportH
+//            }
+//            val maxY = if (scaledH <= viewportH) {
+//                ((viewportH - scaledH) / 2f) + slackPx
+//            } else {
+//                0f + viewportH
+//            }
+//
+//            return Offset(
+//                x = newOffset.x.coerceIn(minX, maxX),
+//                y = newOffset.y.coerceIn(minY, maxY),
+//            )
+//        }
+//
+//        Box(
+//            modifier = Modifier
+//                .fillMaxSize()
+//                .pointerInput(Unit) {
+//                    detectTransformGestures { _, pan, zoom, _ ->
+//                        val newScale = (scale * zoom).coerceIn(minScale, maxScale)
+//                        val newOffset = offset + pan
+//                        scale = newScale
+//                        offset = clampOffset(newOffset, newScale)
+//                    }
+//                }
+//        ) {
+//            LazyVerticalGrid(
+//                columns = GridCells.Fixed(cols),
+//                userScrollEnabled = false,
+//                modifier = Modifier
+//                    .requiredSize(boardW, boardH)
+//                    .graphicsLayer {
+//                        // IMPORTANT: makes clamp math behave intuitively
+//                        transformOrigin = TransformOrigin(0f, 0f)
+//
+//                        scaleX = scale
+//                        scaleY = scale
+//                        translationX = offset.x
+//                        translationY = offset.y
+//                    },
+//                horizontalArrangement = Arrangement.spacedBy(0.dp),
+//                verticalArrangement = Arrangement.spacedBy(0.dp),
+//            ) {
+//
+//
+//                items(cells, key = { it.gid }) { cell ->
+//
+//                    var bg = Color(0xFF282C34)
+//                    var txt = ""
+//                    var fg = Color(0xFFFFFFFF)
+//
+//                    // •
+//                    // https://materialui.co/colors
+//                    // https://material-theme.com/docs/reference/color-palette/
+//
+//                    val flagBlueColor = Color(0xFF61AEEF)
+//                    val revealedFont = Color(0xFFFFFFFF)
+//                    val revealedBackground = Color(0xFF4D515D)
+//                    val notRevealedBackground = Color(0xFF282C34)
+//                    val explodedBackground = Color(0xFFf78c6c) // 0xFF9B859D 0xFF80cbc4
+//                    val incorrectPinkColor = Color(0xFFc792ea)
+//                    val probColor = Color(0xff7286BF)
+//                    val ruleColor = Color(0xffbcc8eb)
+//
+//                    if (cell.isRevealed) {
+//                        if (cell.adjacentMines == 0) {
+//                            bg = revealedBackground
+//                            fg = revealedBackground
+//                            txt = ""
+//                        } else if (cell.adjacentMines >= 1) {
+//                            bg = revealedBackground
+//                            fg = if (cell.conflict) incorrectPinkColor else
+//                                (if (settings.glyphMode == GlyphMode.COLORS)
+//                                    Color(state.colors.get(cell.adjacentMines-1))
+//                                    else revealedFont)
+//                            txt = state.glyphs.get(cell.adjacentMines-1)
+//                        } else if (cell.isMine) {
+//                            if (cell.isExploded) {
+//                                bg = explodedBackground
+//                                fg = revealedFont
+//                                txt = "@"
+//                            }
+//                            else {
+//                                bg = if (cell.isFlagged) flagBlueColor else incorrectPinkColor
+//                                fg = revealedFont
+//                                txt = if (cell.isFlagged) "F" else "X"
+//                            }
+//                        }
+//                    } else { // not revealed
+//                        if (cell.isExploded) {  // unflagged mine
+//                            if (cell.isExplodedGid) {
+//                                bg = explodedBackground
+//                                fg = revealedFont
+//                                txt = "@"
+//                            } else if (cell.isFlagged) {
+//                                bg = flagBlueColor
+//                                fg = revealedFont
+//                                txt = "F"
+//                            } else {
+//                                bg = incorrectPinkColor
+//                                fg = revealedFont
+//                                txt = "F"
+//                            }
+//                        }
+//                        else if (cell.isFlagged) {
+//                            if ((ui.isVerify or ui.gameOver) and !cell.isMine) {
+//                                bg = incorrectPinkColor
+//                                fg = revealedFont
+//                                txt = "F"
+//                            } else {
+//                                bg = flagBlueColor
+//                                fg = revealedFont
+//                                txt = "F"
+//                            }
+//                        }
+//                        else if (isEnumerate) {
+//                            if (cell.conflict) {
+//                                bg = notRevealedBackground
+//                                fg = incorrectPinkColor
+//                                txt = "C"
+//                            } else if (cell.forcedFlag) {
+//                                bg = notRevealedBackground
+//                                fg = ruleColor
+//                                txt = "X"
+//                            } else if (cell.forcedOpen) {
+//                                bg = notRevealedBackground
+//                                fg = ruleColor
+//                                txt = "O"
+//                            } else if (ui.overlay.isConsistent && cell.probability != null) {
+//                                bg = notRevealedBackground
+//                                fg = probColor
+//                                txt = probabilityToGlyph(cell.probability)
+//                            } else {
+//                                bg = notRevealedBackground
+//                                fg = revealedFont
+//                                txt = ""
+//                            }
+//                        }
+//                    }
+//
+//                    Box(
+//                        modifier = Modifier
+//                            .padding(4.dp)
+//                            .border(
+//                                width = 4.dp,
+//                                color = notRevealedBackground)
+//                            .background(notRevealedBackground)
+//                             ,
+//                        contentAlignment = Alignment.Center
+//                    ) {
+//                        Box(
+//                            modifier = Modifier
+//                                .padding(4.dp)
+//                                .size(cellSize)
+//                                .border(
+//                                    width= 2.dp,
+//                                    color = incorrectPinkColor, //notRevealedBackground,
+//                                    shape = RoundedCornerShape(5))
+//                                .background(
+//                                    color = bg,
+//                                    shape = RoundedCornerShape(5))
+//                                .combinedClickable(
+//                                    onClick = { onCell(cell.gid) },
+//                                    onLongClick = { onCellLongPress(cell.gid) }
+//                                ),
+//                            contentAlignment = Alignment.Center
+//                        ) {
+//                            Text(txt, color = fg)
+//                        }
+//                    }
+//                }
+//            }
+//        }
+//    }
 }
 
 @Composable

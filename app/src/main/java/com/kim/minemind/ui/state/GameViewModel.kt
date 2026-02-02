@@ -45,6 +45,8 @@ import kotlinx.serialization.json.Json
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+
 class GameViewModel(
     private val settingsRepo: VisualSettingsRepository,
     private val visualResolver: VisualResolver,
@@ -79,7 +81,7 @@ class GameViewModel(
     private fun buildSnapshot(): GameSnapshot =
         GameSnapshot(
             board = board.toSnapshot(),
-            history = history.toSnapshot()
+            moves = _uiState.value.moves
         )
     //    Save after truth changes
     //    dispatch()
@@ -137,14 +139,24 @@ class GameViewModel(
         }
     }
 
-    private fun restoreFromSnapshot(snap: GameSnapshot) {
+    private fun restoreFromSnapshot(s: GameSnapshot) {
         board = Board(
-            rows = snap.board.rows,
-            cols = snap.board.cols,
-            mines = snap.board.mines,
-            seed = snap.board.seed
+            rows = s.board.rows,
+            cols = s.board.cols,
+            mines = s.board.mines,
+            seed = s.board.seed
         )
-        board.restoreFromSnapshot(snap.board)
+        board.restoreFromSnapshot(s.board)
+
+        _uiState.value = GameUiState(
+            rows = s.board.rows,
+            cols = s.board.cols,
+            mines = s.board.mines,
+            seed = s.board.seed,
+            firstClickGid = s.board.firstClickGid,
+            moves = s.moves,
+            cells = buildCells(board)
+        )
     }
 
     private fun persist(encoded: String) {
@@ -271,67 +283,6 @@ class GameViewModel(
     }
 
 
-    fun dispatch2(action: Action?, gid: Int) {
-        if (action == null) return
-        val beforeMoves = _uiState.value.moves
-        val beforeRemainingSafe = board.remainingSafe
-
-        val cs = board.apply(action, gid) // <-- TRUTH ONLY
-        Log.d(TAG, "cs = $cs")
-        if (cs.empty) return
-        history.push(
-            HistoryEntry(
-                event = HistoryEvent.UserCommand(action, gid),
-                changes = cs,
-                moveCountBefore = beforeMoves,
-                remainingSafeBefore = beforeRemainingSafe
-            )
-        )
-
-        // TODO:  maybe separate out prob and rules so maybe they can be ran concurrently..?
-
-        val overlay = if (!board.gameOver and _uiState.value.isEnumerate) analyzer.analyze(board) else AnalyzerOverlay()
-        val conflictDelta: ConflictDelta = if (!board.gameOver and _uiState.value.isEnumerate) board.conflictsByGid(cs.getAllGid()) else ConflictDelta()
-        val conflictBoard = _uiState.value.conflictBoard.applyDelta(conflictDelta)
-
-//        viewModelScope.launch(Dispatchers.Default) {
-//            val overlay = analyzer.analyze(board)
-//            val conflictDelta = board.conflictsByGid(cs.getAllGid())
-//
-//            withContext(Dispatchers.Main) {
-//                applyOverlayToUi(overlay, conflictDelta)
-//            }
-//        }
-
-
-
-        Log.d(TAG, "overlay = $overlay")
-        Log.d(TAG, "overlay.conflictProbs = ${overlay.conflictProbs}")
-        Log.d(TAG, "conflictBoard = ${conflictBoard}")
-
-        patchCells(
-            cs = cs,
-            board = board,
-            overlay = overlay,
-            conflictsBoard = conflictBoard,
-            clearConflicts = conflictDelta.removes
-        )
-        Log.d(TAG, "cells = ${cells}")
-
-        _uiState.update { s ->
-            s.copy(
-                moves = beforeMoves + 1,
-                gameOver = cs.gameOver,
-                win = cs.win,
-                cells = cells,
-                overlay = overlay,
-                ruleList = overlay.ruleList,
-                conflictBoard = conflictBoard,
-                conflictProbs = overlay.conflictProbs
-            )
-        }
-    }
-
     private fun patchCells(
         cs: ChangeSet,
         board: Board,
@@ -380,102 +331,95 @@ class GameViewModel(
         }
     }
 
+    private var autoJob: Job? = null
 
-    private fun autoBuildCells(
-        totalMoves: Int,
-        board: Board,
-        overlay: AnalyzerOverlay,
-        cs: ChangeSet,
-        conflictDelta: ConflictDelta,
-        conflictBoard: ConflictList
-    ) {
-        patchCells(
-            cs = cs,
-            board = board,
-            overlay = overlay,
-            conflictsBoard = conflictBoard,
-            clearConflicts = conflictDelta.removes
-        )
-        Log.d(TAG, "cells = ${cells}")
-
-        _uiState.update { s ->
-            s.copy(
-                moves = totalMoves,
-                gameOver = cs.gameOver,
-                win = cs.win,
-                cells = cells,
-                overlay = overlay,
-                ruleList = overlay.ruleList,
-                conflictBoard = conflictBoard,
-                conflictProbs = overlay.conflictProbs
-            )
-        }
-    }
-
-    // tODO:  fix autobots
     fun auto() {
         if (board.gameOver) return
 
-        Log.d(TAG, "autobot")
+        // Cancel any existing auto run
+        autoJob?.cancel()
 
-        var overlay = _uiState.value.overlay
         val beforeMoves = _uiState.value.moves
         val beforeRemainingSafe = board.remainingSafe
 
-        var prevTotalMoves = 0
-        var totalMoves = 0
-        var totalChanges = ChangeSet()
-        do {
-            overlay = analyzer.runRulesOnly(board, stopAfterOne = false)
-            Log.d(TAG, "overlay is $overlay")
-            prevTotalMoves = totalMoves
-            for (ruleAction in overlay.ruleActions) {
-                if ((ruleAction.value == Action.OPEN) and board.isMine(ruleAction.key)) continue
-                if ((ruleAction.value == Action.FLAG) and !board.isMine(ruleAction.key)) continue
+        autoJob = viewModelScope.launch(Dispatchers.Default) {
 
-                val cs = board.apply(ruleAction.value, ruleAction.key)
-                autoBuildCells(totalMoves, board, overlay, cs, ConflictDelta(), _uiState.value.conflictBoard)
-                totalChanges = totalChanges.merged(cs)
-                totalMoves += 1
-                Log.d(TAG, "ruleAction = ${ruleAction.value} ${ruleAction.key}")
-                Log.d(TAG, "cs is $cs")
-            }
-        } while ((totalMoves != prevTotalMoves) and !totalChanges.gameOver)
+            var overlay: AnalyzerOverlay
+            var totalChanges = ChangeSet()
+            var totalApplied = 0
 
-        if (totalChanges.empty) return
+            do {
+                overlay = analyzer.runRulesOnly(board, stopAfterOne = false)
 
-        history.push(
-            HistoryEntry(
-                event = HistoryEvent.ApplyRecommendations(totalMoves),
-                changes = totalChanges,
-                moveCountBefore = beforeMoves,
-                remainingSafeBefore = beforeRemainingSafe
-            )
-        )
+                if (overlay.ruleActions.isEmpty()) break
 
-        if (!totalChanges.gameOver and _uiState.value.isEnumerate) {
-            overlay = analyzer.analyze(board)
+                // Apply all safe actions in this batch
+                for ((gid, action) in overlay.ruleActions) {
 
-            val conflictDelta =  board.conflictsByGid(totalChanges.getAllGid())
-            val conflictBoard = _uiState.value.conflictBoard.applyDelta(conflictDelta)
-            patchCells(
-                cs = totalChanges,
-                board = board,
-                overlay = overlay,
-                conflictsBoard = conflictBoard,
-                clearConflicts = conflictDelta.removes
-            )
-            _uiState.update { s ->
-                s.copy(
-                    moves = beforeMoves + totalMoves,
-                    gameOver = totalChanges.gameOver,
-                    win = totalChanges.win,
-                    cells = cells,
-                    overlay = overlay,
-                    ruleList = overlay.ruleList,
-                    conflictBoard = conflictBoard,
-                    conflictProbs = overlay.conflictProbs
+                    // DO NOT allow autobot to step on a mine
+                    if (action == Action.OPEN && board.isMine(gid)) continue
+                    if (action == Action.FLAG && !board.isMine(gid)) continue
+
+                    val cs = board.apply(action, gid)
+                    if (!cs.empty) {
+                        totalChanges = totalChanges.merged(cs)
+                        totalApplied++
+                    }
+                }
+
+            } while (!overlay.ruleActions.isEmpty() && !totalChanges.gameOver)
+
+            // If nothing happened, we're done
+            if (totalChanges.empty) return@launch
+
+            // 2. Build overlay + conflict after all rule applications are done
+            val finalOverlay =
+                if (_uiState.value.isEnumerate && !totalChanges.gameOver)
+                    analyzer.analyze(board)
+                else AnalyzerOverlay()
+
+            val conflictDelta =
+                if (_uiState.value.isEnumerate && !totalChanges.gameOver)
+                    board.conflictsByGid(totalChanges.getAllGid())
+                else ConflictDelta()
+
+            val conflictBoard = conflictDelta.upserts
+
+            withContext(Dispatchers.Main) {
+
+                // 3. Update history with ONE entry
+                history.push(
+                    HistoryEntry(
+                        event = HistoryEvent.ApplyRecommendations(totalApplied),
+                        changes = totalChanges,
+                        moveCountBefore = beforeMoves,
+                        remainingSafeBefore = beforeRemainingSafe
+                    )
                 )
+
+                // 4. Incrementally update UI cells once
+                patchCells(
+                    cs = totalChanges,
+                    board = board,
+                    overlay = finalOverlay,
+                    conflictsBoard = conflictBoard,
+                    clearConflicts = conflictDelta.removes
+                )
+
+                // 5. Update UI metadata
+                _uiState.update { s ->
+                    s.copy(
+                        moves = beforeMoves + totalApplied,
+                        gameOver = totalChanges.gameOver,
+                        win = totalChanges.win,
+                        overlay = finalOverlay,
+                        ruleList = finalOverlay.ruleList,
+                        conflictBoard = conflictBoard,
+                        conflictProbs = finalOverlay.conflictProbs
+                    )
+                }
+
+                persistSnapshot()
             }
         }
     }

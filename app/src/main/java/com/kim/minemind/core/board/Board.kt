@@ -16,6 +16,8 @@ class Board(
     val seed: Int,
 ) {
 
+    var firstClickGid: Int = -1
+
     var minesPlaced: Boolean = false
     private set
     var gameOver: Boolean = false
@@ -309,6 +311,8 @@ class Board(
 
     fun generateBoard(firstClickGid: Int) {
         Log.d(TAG, "generateBoard, $firstClickGid  $mines")
+
+        this@Board.firstClickGid = firstClickGid
 
         val rng = RNG(seed, rows, cols, mines, firstClickGid)
 
